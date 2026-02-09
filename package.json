@@ -1,0 +1,98 @@
+{
+  "name": "aibo",
+  "private": true,
+  "version": "0.1.0",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\" \"npm run dev:server\"",
+    "predev": "lsof -t -i :3001,18789 | xargs kill -9 2>/dev/null || true",
+    "dev:vite": "vite",
+    "dev:electron": "wait-on tcp:5173 && wait-on tcp:3001 && tsc -p tsconfig.electron.json && cross-env NODE_ENV=development electron .",
+    "dev:server": "ts-node-dev --respawn --transpile-only server/index.ts",
+    "build": "tsc -b && vite build && tsc -p tsconfig.electron.json && electron-builder",
+    "build:mac": "tsc -b && vite build && tsc -p tsconfig.electron.json && electron-builder --mac",
+    "build:win": "tsc -b && vite build && tsc -p tsconfig.electron.json && electron-builder --win",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "build": {
+    "appId": "com.aibo.desktop",
+    "productName": "Aibō",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "public/**/*"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "public/icon.png"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.png"
+    }
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/multipart": "^9.4.0",
+    "@fastify/websocket": "^11.2.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "@ricky0123/vad-react": "^0.0.36",
+    "@ricky0123/vad-web": "^0.0.30",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
+    "@types/three": "^0.182.0",
+    "@types/ws": "^8.18.1",
+    "axios": "^1.13.4",
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.45.1",
+    "fastify": "^5.7.4",
+    "form-data": "^4.0.5",
+    "framer-motion": "^12.30.0",
+    "lucide-react": "^0.563.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.13.0",
+    "recharts": "^3.7.0",
+    "three": "^0.182.0",
+    "viem": "^2.45.1",
+    "ws": "^8.19.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@tailwindcss/container-queries": "^0.1.1",
+    "@tailwindcss/forms": "^0.5.11",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.10.10",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.24",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^34.0.2",
+    "electron-builder": "^25.1.8",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vite": "^7.2.4",
+    "wait-on": "^8.0.2"
+  }
+}

@@ -1,0 +1,24 @@
+{
+    "name": "aibo-team-backend",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "ts-node-dev --respawn --transpile-only index.ts",
+        "start": "ts-node index.ts"
+    },
+    "dependencies": {
+        "@fastify/cors": "^11.2.0",
+        "@solana/spl-token": "^0.4.14",
+        "@solana/web3.js": "^1.98.4",
+        "axios": "^1.13.5",
+        "dotenv": "^17.2.3",
+        "fastify": "^5.7.4",
+        "viem": "^2.45.1"
+    },
+    "devDependencies": {
+        "@types/node": "^24.10.10",
+        "ts-node": "^10.9.2",
+        "ts-node-dev": "^2.0.0",
+        "typescript": "~5.9.3"
+    }
+}

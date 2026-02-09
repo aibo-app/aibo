@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Aibō Safe Vaults Inventory</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2c5bf6",
+                        "beige": "#ece9d8",
+                        "panel": "#ffffff",
+                        "text-main": "#1f2937",
+                        "text-muted": "#6b7280",
+                    },
+                    fontFamily: {
+                        "display": ["Outfit", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "lg": "12px",
+                        "xl": "16px",
+                    },
+                    boxShadow: {
+                        "soft": "2px 2px 5px rgba(0,0,0,0.05), -1px -1px 4px rgba(255,255,255,0.8)",
+                        "bevel": "inset 1px 1px 0px rgba(255,255,255,0.7), inset -1px -1px 0px rgba(0,0,0,0.05)",
+                        "button": "2px 2px 0px rgba(0,0,0,0.1)",
+                        "input": "inset 2px 2px 4px rgba(0,0,0,0.05), inset -1px -1px 2px rgba(255,255,255,0.8)",
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #ece9d8;
+            color: #1f2937;
+        }
+        h1, h2, h3, h4, .font-display {
+            font-family: 'Outfit', sans-serif;
+        }
+        .soft-panel {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(255,255,255,0.6);
+        }
+        .soft-button {
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .soft-button:active {
+            transform: translateY(1px);
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }.asset-table th {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .asset-table td {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #f9fafb;
+        }
+        .asset-table tr:last-child td {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body class="bg-beige h-screen overflow-hidden text-text-main selection:bg-primary selection:text-white">
+<div class="flex h-screen w-full flex-col overflow-hidden relative">
+<div class="w-full bg-white/80 backdrop-blur border-b border-black/5 py-2 z-50 shadow-sm flex justify-between px-6 items-center">
+<div class="flex gap-4 items-center">
+<span class="font-display font-bold text-lg text-text-main tracking-tight">Aibō <span class="text-primary">Safe</span></span>
+<div class="h-4 w-px bg-gray-300"></div>
+<div class="relative group">
+<button class="flex items-center gap-2 text-xs font-bold text-text-main bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-bevel hover:bg-gray-50 transition-colors">
+<span class="material-symbols-outlined text-primary text-sm">wallet</span>
+                        Primary Savings
+                        <span class="material-symbols-outlined text-sm text-text-muted">expand_more</span>
+</button>
+<div class="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-100 rounded-lg shadow-lg hidden group-hover:block z-50 p-1">
+<div class="px-3 py-2 hover:bg-beige/50 rounded-md cursor-pointer flex items-center justify-between">
+<span class="text-xs font-bold text-primary">Primary Savings</span>
+<span class="material-symbols-outlined text-xs text-primary">check</span>
+</div>
+<div class="px-3 py-2 hover:bg-beige/50 rounded-md cursor-pointer">
+<span class="text-xs font-medium text-text-main">Active Trading</span>
+</div>
+<div class="px-3 py-2 hover:bg-beige/50 rounded-md cursor-pointer">
+<span class="text-xs font-medium text-text-main">Cold Storage</span>
+</div>
+</div>
+</div>
+</div>
+<div class="text-xs font-medium text-text-muted flex gap-4">
+<span>Safe ID: <span class="font-mono text-text-main">0x84...92A</span></span>
+<span class="flex items-center gap-1"><span class="block size-2 bg-green-500 rounded-full animate-pulse"></span> Connected</span>
+</div>
+</div>
+<div class="flex flex-1 overflow-hidden">
+<aside class="w-20 bg-[#f4f2e6] border-r border-black/5 flex flex-col items-center py-6 gap-6 z-40">
+<div class="size-10 bg-white rounded-xl flex items-center justify-center shadow-soft border border-white">
+<span class="material-symbols-outlined text-primary text-2xl font-bold">lock_person</span>
+</div>
+<nav class="flex flex-col gap-4 mt-4">
+<button class="size-10 rounded-lg bg-white text-text-muted flex items-center justify-center shadow-soft border border-white hover:text-primary transition-all">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+</button>
+<button class="size-10 rounded-lg bg-primary text-white flex items-center justify-center shadow-button hover:bg-primary/90 transition-all">
+<span class="material-symbols-outlined text-[20px]">inventory_2</span>
+</button>
+<button class="size-10 rounded-lg bg-white text-text-muted flex items-center justify-center shadow-soft border border-white hover:text-primary transition-all">
+<span class="material-symbols-outlined text-[20px]">swap_horiz</span>
+</button>
+<button class="size-10 rounded-lg bg-white text-text-muted flex items-center justify-center shadow-soft border border-white hover:text-primary transition-all">
+<span class="material-symbols-outlined text-[20px]">history</span>
+</button>
+<button class="size-10 rounded-lg bg-white text-text-muted flex items-center justify-center shadow-soft border border-white hover:text-primary transition-all">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+</button>
+</nav>
+<div class="mt-auto flex flex-col items-center gap-4">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 border-2 border-white shadow-md" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDRbhgyUn6jkW20dDOnMpH_1-jPlYOa9Zl1YeFV9bYc4MUus5PTlyqty73mOkBOGSlc5xFq1dorT5OLlELpT-8b73OvnHS1jiMs8BwIQ--bV-YL-IS_kwsKx_eSIv0sEZ-wn022kvrUq1v7pe7MFjtsWlryPULlmLs0yBlDjzbly_UW9_WVLnOhCB9ZhSLOiY8FCGK1_ozB7KiBAJe4h-ZsCWP_12tEOiVAVfkTo_rJlA1ya86XNG0LAXBuZP4oLPdehoFs-D4AQFc");'></div>
+</div>
+</aside>
+<main class="flex-1 flex flex-col p-6 overflow-hidden bg-beige">
+<header class="flex justify-between items-end mb-6">
+<div>
+<h1 class="text-xs uppercase tracking-widest font-bold text-text-muted mb-1 font-body">Vault Management</h1>
+<h2 class="text-3xl font-bold tracking-tight text-text-main font-display">Safe Vaults Inventory</h2>
+</div>
+<div class="flex gap-3">
+<button class="bg-white text-text-main border border-gray-200 font-bold px-4 py-2 rounded-lg shadow-bevel hover:bg-gray-50 transition-all font-display tracking-wide text-xs flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">download</span>
+                            Export CSV
+                        </button>
+<button class="bg-primary text-white font-bold px-4 py-2 rounded-lg shadow-button hover:bg-primary/90 transition-all font-display tracking-wide text-xs flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span>
+                            Add Asset
+                        </button>
+</div>
+</header>
+<div class="flex flex-1 gap-6 overflow-hidden">
+<div class="flex-1 soft-panel flex flex-col overflow-hidden relative">
+<div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-primary to-blue-300"></div>
+<div class="p-6 pb-2 flex justify-between items-center">
+<div class="flex gap-2">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-2.5 top-2 text-gray-400 text-sm">search</span>
+<input class="pl-8 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none shadow-input w-64 placeholder:text-gray-400" placeholder="Search assets..." type="text"/>
+</div>
+<button class="p-1.5 bg-white border border-gray-200 rounded-lg text-text-muted hover:text-primary shadow-sm">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+</button>
+</div>
+<div class="text-xs text-text-muted font-medium">
+                                Showing 8 of 12 Assets
+                            </div>
+</div>
+<div class="flex-1 overflow-y-auto p-6 pt-2">
+<table class="w-full text-left asset-table">
+<thead>
+<tr>
+<th class="pl-2">Asset Name</th>
+<th class="text-right">Price</th>
+<th class="text-right">Balance</th>
+<th class="text-right">Value (USD)</th>
+<th class="text-right pr-2">24h Change</th>
+</tr>
+</thead>
+<tbody class="text-sm font-medium text-text-main">
+<tr class="group hover:bg-gray-50 transition-colors cursor-pointer rounded-lg">
+<td class="pl-2">
+<div class="flex items-center gap-3">
+<div class="size-9 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm p-1">
+<img alt="SOL" class="w-full h-full object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfatrmsPIK4Uq8EAprTRqhAN7dvgk6mE4Up-KysXeaps6mrvQBkq_X1Kzl2eAan3DYLHVBZVDRoBTfuVZ2z9BEcwP4h03YCuh-gjKaUY92vUe3O9TvaCNQ8GzjSn1bHvLJMF2xxGWax-HV8H5lfmiEeOO8ag7XOrSxxZtPU_nRrdfeQWuWJRe1zNwkbB1yABBFcdHPOiHqJxkHhXLWnfz04Rb5n-oqyS5qT-aYW1x8O-v305uNkU5GX7ux9idCnTNUjrogFfJljL0"/>
+</div>
+<div>
+<div class="font-bold font-display text-base">Solana</div>
+<div class="text-[10px] text-text-muted font-mono uppercase">SOL</div>
+</div>
+</div>
+</td>
+<td class="text-right font-mono text-text-muted">$148.89</td>
+<td class="text-right font-mono">25.5 SOL</td>
+<td class="text-right font-bold font-display text-base">$3,799.50</td>
+<td class="text-right pr-2">
+<div class="inline-flex items-center px-2 py-1 rounded bg-green-50 text-green-600 text-xs font-bold border border-green-100">
+                                                +4.2%
+                                            </div>
+</td>
+</tr>
+<tr class="group hover:bg-gray-50 transition-colors cursor-pointer">
+<td class="pl-2">
+<div class="flex items-center gap-3">
+<div class="size-9 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm p-1">
+<img alt="BTC" class="w-full h-full object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBp0clC7FWaQI5_TwZ9gKnMjzprqPY5W8uY7u7nOfrItkGIYSAj7fQolq2BqwfWbTnxAWmh_BiVNqrzYy4db0CGJbWq6gTNNEDnqQAj1tCX1q2-Ma1D2QtbeOje4SuhjRHUHpapwdXKFdhsBI6X7lhhSq3_BDusHoXcL2_AvOZPUSH1Sh10aMWA7ZVKoPzVF3WKZC15QiUhMeuqOeyYN-T1700rYYHOhIC0owgKDWyWnoh4J7ecDQexLga4jGkHofY8ZhXK4tVyLWY"/>
+</div>
+<div>
+<div class="font-bold font-display text-base">Bitcoin</div>
+<div class="text-[10px] text-text-muted font-mono uppercase">BTC</div>
+</div>
+</div>
+</td>
+<td class="text-right font-mono text-text-muted">$68,420.50</td>
+<td class="text-right font-mono">12.45 BTC</td>
+<td class="text-right font-bold font-display text-base">$851,835.22</td>
+<td class="text-right pr-2">
+<div class="inline-flex items-center px-2 py-1 rounded bg-green-50 text-green-600 text-xs font-bold border border-green-100">
+                                                +2.1%
+                                            </div>
+</td>
+</tr>
+<tr class="group hover:bg-gray-50 transition-colors cursor-pointer">
+<td class="pl-2">
+<div class="flex items-center gap-3">
+<div class="size-9 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm p-1">
+<img alt="ETH" class="w-full h-full object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKx7ZKSIY7-LrqzBbV8AgvEhYH2so3e5QZ7IWVHcRCpQx4v1Fp6RK4YGXVqekYJ66yToyuD1cwdCTx2zbF4bhcIdxUg_1bLGrDA7ttZKO9YTZh8TO9piz3km8HdbDP5k5-AxEGp_ZwGp8riQ4s_fKrtt71pyA1KK752CYai2VGLY4TP_wKRRPfZ9iMi9vtgUQO3v6SsZKFsJV0ox62ARgzR7Ft7MjenEKnslf9gtUAcd25tYdYEkhftEeK2INM5iKKgleT3lIL-rM"/>
+</div>
+<div>
+<div class="font-bold font-display text-base">Ethereum</div>
+<div class="text-[10px] text-text-muted font-mono uppercase">ETH</div>
+</div>
+</div>
+</td>
+<td class="text-right font-mono text-text-muted">$3,510.12</td>
+<td class="text-right font-mono">45.2 ETH</td>
+<td class="text-right font-bold font-display text-base">$158,657.42</td>
+<td class="text-right pr-2">
+<div class="inline-flex items-center px-2 py-1 rounded bg-green-50 text-green-600 text-xs font-bold border border-green-100">
+                                                +1.4%
+                                            </div>
+</td>
+</tr>
+<tr class="group hover:bg-gray-50 transition-colors cursor-pointer">
+<td class="pl-2">
+<div class="flex items-center gap-3">
+<div class="size-9 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm p-1">
+<img alt="USDC" class="w-full h-full object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWrWG7kkyhCS0Sik4stvUO3N1TeKmF7P-_5qlnQGbbu010MhG6MKEb96bIzV0TJs4f0tdL42L5mwR3mDfppZLKWxtTFH88HqjbWqQvbSiQUQzo504DCE_d4Aq5XQB-yniDD3DNYnR4I9iRFk3lS4fR4hbxCqPVhjE8SAGboUKjYvzy65BDdUPe7jd2WwvughEEQpTJPAbuShFixMWfNbVazdqzvkVHT6AkXBzFt-nftqosUqwRBh83Lc1Bh61Y3HvtbENbH26RMp0"/>
+</div>
+<div>
+<div class="font-bold font-display text-base">USD Coin</div>
+<div class="text-[10px] text-text-muted font-mono uppercase">USDC</div>
+</div>
+</div>
+</td>
+<td class="text-right font-mono text-text-muted">$1.00</td>
+<td class="text-right font-mono">154,200.00 USDC</td>
+<td class="text-right font-bold font-display text-base">$154,200.00</td>
+<td class="text-right pr-2">
+<div class="inline-flex items-center px-2 py-1 rounded bg-gray-100 text-gray-500 text-xs font-bold border border-gray-200">
+                                                0.0%
+                                            </div>
+</td>
+</tr>
+<tr class="group hover:bg-gray-50 transition-colors cursor-pointer">
+<td class="pl-2">
+<div class="flex items-center gap-3">
+<div class="size-9 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm p-1">
+<img alt="BNB" class="w-full h-full object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwfsp1Qz_7Q8u2kDKr7cDo-Mw3XT3lH3i-PzKhb9ltPHIwBiBcBkY0xmRjl0IH5_o5o31mKW3hwzchItGJLRDwTU5PVc5zkF1QaAY0JAJJ5L77NttAoU1sy3y_-5rYpmIquSLKVTXsLxhWjnM68E04LeFnvD4VShZqVWxJwrfO1-yaIwaI2RpZZWybhTXKdJc9wMhZGBEBHnYrYPR5XXSXARWg9I8q0UejKZrbJITaIUOKri7Uu982AB7sB9c-VP65JF11EnhHizs"/>
+</div>
+<div>
+<div class="font-bold font-display text-base">BNB</div>
+<div class="text-[10px] text-text-muted font-mono uppercase">BNB</div>
+</div>
+</div>
+</td>
+<td class="text-right font-mono text-text-muted">$598.45</td>
+<td class="text-right font-mono">120.5 BNB</td>
+<td class="text-right font-bold font-display text-base">$72,113.22</td>
+<td class="text-right pr-2">
+<div class="inline-flex items-center px-2 py-1 rounded bg-red-50 text-red-500 text-xs font-bold border border-red-100">
+                                                -0.3%
+                                            </div>
+</td>
+</tr>
+<tr class="group hover:bg-gray-50 transition-colors cursor-pointer">
+<td class="pl-2">
+<div class="flex items-center gap-3">
+<div class="size-9 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm p-1">
+<span class="text-xs font-bold">LINK</span>
+</div>
+<div>
+<div class="font-bold font-display text-base">Chainlink</div>
+<div class="text-[10px] text-text-muted font-mono uppercase">LINK</div>
+</div>
+</div>
+</td>
+<td class="text-right font-mono text-text-muted">$17.50</td>
+<td class="text-right font-mono">400.0 LINK</td>
+<td class="text-right font-bold font-display text-base">$7,000.00</td>
+<td class="text-right pr-2">
+<div class="inline-flex items-center px-2 py-1 rounded bg-green-50 text-green-600 text-xs font-bold border border-green-100">
+                                                +1.2%
+                                            </div>
+</td>
+</tr>
+<tr class="group hover:bg-gray-50 transition-colors cursor-pointer">
+<td class="pl-2">
+<div class="flex items-center gap-3">
+<div class="size-9 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm p-1">
+<span class="text-xs font-bold">TAO</span>
+</div>
+<div>
+<div class="font-bold font-display text-base">Bittensor</div>
+<div class="text-[10px] text-text-muted font-mono uppercase">TAO</div>
+</div>
+</div>
+</td>
+<td class="text-right font-mono text-text-muted">$612.45</td>
+<td class="text-right font-mono">10.0 TAO</td>
+<td class="text-right font-bold font-display text-base">$6,124.50</td>
+<td class="text-right pr-2">
+<div class="inline-flex items-center px-2 py-1 rounded bg-green-50 text-green-600 text-xs font-bold border border-green-100">
+                                                +8.2%
+                                            </div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<aside class="w-80 flex flex-col gap-6">
+<div class="soft-panel p-6 flex flex-col h-full relative overflow-hidden">
+<div class="flex justify-between items-center mb-6 border-b border-gray-100 pb-2">
+<h4 class="text-sm font-bold text-text-main flex items-center gap-2 font-display">
+<span class="material-symbols-outlined text-primary text-lg">show_chart</span> 
+                                    Vault Growth
+                                </h4>
+<div class="flex bg-gray-100 rounded-lg p-0.5">
+<button class="px-2 py-0.5 bg-white text-[10px] font-bold text-text-main rounded shadow-sm">7D</button>
+<button class="px-2 py-0.5 text-[10px] font-medium text-text-muted hover:text-text-main">1M</button>
+<button class="px-2 py-0.5 text-[10px] font-medium text-text-muted hover:text-text-main">1Y</button>
+</div>
+</div>
+<div class="flex flex-col gap-1 mb-8">
+<span class="text-xs font-medium text-text-muted uppercase tracking-wide">Primary Savings Performance</span>
+<div class="flex items-baseline gap-3">
+<span class="text-4xl font-display font-extrabold text-text-main">+4.2%</span>
+<span class="text-sm font-bold text-green-600 bg-green-50 px-1.5 rounded border border-green-100">+$51,200</span>
+</div>
+</div>
+<div class="relative h-48 w-full mt-4">
+<svg class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 50">
+<defs>
+<linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#2c5bf6" stop-opacity="0.2"></stop>
+<stop offset="100%" stop-color="#2c5bf6" stop-opacity="0"></stop>
+</linearGradient>
+</defs>
+<path d="M0,45 C10,40 20,42 30,35 C40,28 50,32 60,20 C70,15 80,18 90,5 L100,2 L100,50 L0,50 Z" fill="url(#chartGradient)"></path>
+<path d="M0,45 C10,40 20,42 30,35 C40,28 50,32 60,20 C70,15 80,18 90,5 L100,2" fill="none" stroke="#2c5bf6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<circle cx="100" cy="2" fill="white" r="2" stroke="#2c5bf6" stroke-width="1.5"></circle>
+</svg>
+<div class="flex justify-between text-[9px] text-text-muted mt-2 font-mono uppercase">
+<span>Mon</span>
+<span>Tue</span>
+<span>Wed</span>
+<span>Thu</span>
+<span>Fri</span>
+<span>Sat</span>
+<span>Sun</span>
+</div>
+</div>
+<div class="mt-auto pt-6 border-t border-gray-100 space-y-3">
+<div class="flex items-center justify-between text-xs">
+<span class="text-text-muted">High (24h)</span>
+<span class="font-mono font-bold text-text-main">$1,252,100</span>
+</div>
+<div class="flex items-center justify-between text-xs">
+<span class="text-text-muted">Low (24h)</span>
+<span class="font-mono font-bold text-text-main">$1,198,400</span>
+</div>
+<div class="flex items-center justify-between text-xs">
+<span class="text-text-muted">Volume</span>
+<span class="font-mono font-bold text-text-main">$42,500</span>
+</div>
+</div>
+</div>
+</aside>
+</div>
+</main>
+</div>
+<footer class="h-10 bg-[#f4f2e6] border-t border-black/5 px-6 flex items-center justify-between text-[11px] font-bold text-text-muted z-50">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-text-muted">account_balance</span>
+<span class="uppercase tracking-wide">Total Vault Value:</span>
+<span class="text-base font-display font-extrabold text-text-main">$1,240,500<span class="text-gray-400 text-xs">.82</span></span>
+</div>
+</div>
+<div class="flex gap-6 items-center uppercase tracking-wider">
+<span class="flex items-center gap-1"><span class="size-1.5 bg-green-500 rounded-full"></span> Synced Just Now</span>
+<span>Aibō OS v2.1</span>
+</div>
+</footer>
+</div>
+
+</body></html>
