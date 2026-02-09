@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useData } from '../../hooks/useData';
+// import { useData } from '../../hooks/useData'; // Optional: Use if you have the full context
 
 // --- CONFIG ---
 const IS_DEMO_MODE = false;
@@ -7,7 +7,10 @@ const FORCE_FULL_SCREEN = true;
 const DEMO_SCALE = 1.2;
 
 export const AssistantPopup = () => {
-    const { agentAction } = useData();
+    // If not using useData context, mock agentAction as null
+    const agentAction: any = null;
+    // const { agentAction } = useData();
+
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const antennaTipRef = useRef<HTMLDivElement>(null);
 
@@ -196,23 +199,12 @@ export const AssistantPopup = () => {
     };
 
 
-
-
-
-
-
-
-
-
-
     useEffect(() => {
         if (!IS_DEMO_MODE && !FORCE_FULL_SCREEN) return;
 
         const updateScale = () => {
             const h = window.innerHeight;
-            // Base height = 110 (head) + 28 (antenna) + bulb (6) + sway margin.
-            // Using 180 divisor to be extremely safe against clipping.
-            const newScale = (h * 0.85) / 180;
+            const newScale = (h * 0.9) / 120;
             setDynamicScale(newScale);
         };
 
@@ -425,11 +417,11 @@ export const AssistantPopup = () => {
             const finalCenterX = centerX + shakeX;
             const finalCenterY = centerY + shakeY;
 
-            const eyeColor = actionColor || '#2c5bf6'; // Matches Landing Page Accent
+            const eyeColor = actionColor || '#3b82f6';
             ctx.fillStyle = eyeColor;
 
-            ctx.shadowColor = 'rgba(44, 91, 246, 0.4)'; // Match Landing Page Shadow
-            ctx.shadowBlur = isLatchedOn ? 20 : 8; // Tighter shadow for physical look
+            ctx.shadowColor = '#1a56db';
+            ctx.shadowBlur = isLatchedOn ? 25 : 12; // MORE DIFFUSE (from 18 : 10)
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;
 
@@ -591,9 +583,6 @@ export const AssistantPopup = () => {
                     </div>
                 </div>
             </div>
-
-
         </div>
     );
 };
-
