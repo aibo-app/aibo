@@ -71,6 +71,15 @@ rm -rf "$PNPM"/@lit-labs*
 # Ollama (dev dep)
 rm -rf "$PNPM"/ollama@*
 
+# playwright-core (leaked from vitest browser tests — 10MB)
+rm -rf "$PNPM"/playwright-core@*
+
+# web-streams-polyfill (9MB — Node 22+ has native streams)
+rm -rf "$PNPM"/web-streams-polyfill@*
+
+# @opentelemetry semantic-conventions (11MB of string constants, only needed if tracing is enabled)
+rm -rf "$PNPM"/@opentelemetry+semantic-conventions@*
+
 # ── 4. Remove leaked build artifacts (NOT production deps or peer deps) ──────
 echo "[stage-openclaw] Removing leaked build artifacts..."
 # NOTE: node-llama-cpp and @napi-rs/canvas are KEPT — needed for local brain mode + image tools
@@ -78,6 +87,44 @@ rm -rf "$PNPM"/@oxfmt*
 rm -rf "$PNPM"/lightningcss@*
 rm -rf "$PNPM"/lightningcss-*
 rm -rf "$PNPM"/playwright@*
+
+# ── 4b. Remove wrong-platform native binaries ────────────────────────────────
+# Detect target platform from electron-builder env or default to host
+TARGET="${PLATFORM:-$(uname -s | tr '[:upper:]' '[:lower:]')}"
+echo "[stage-openclaw] Target platform: $TARGET — removing other platforms' binaries..."
+
+if [ "$TARGET" = "win32" ] || [ "$TARGET" = "windows" ]; then
+    # Building for Windows — remove macOS and Linux native binaries
+    rm -rf "$PNPM"/*-darwin-arm64@*
+    rm -rf "$PNPM"/*-darwin-x64@*
+    rm -rf "$PNPM"/*-darwin-universal@*
+    rm -rf "$PNPM"/*-linux-arm64*@*
+    rm -rf "$PNPM"/*-linux-x64*@*
+    rm -rf "$PNPM"/*-mac-arm64*@*
+    rm -rf "$PNPM"/*-freebsd-*@*
+    rm -rf "$PNPM"/*-android-*@*
+elif [ "$TARGET" = "darwin" ]; then
+    # Building for macOS — remove Windows and Linux native binaries
+    rm -rf "$PNPM"/*-win32-*@*
+    rm -rf "$PNPM"/*-windows-*@*
+    rm -rf "$PNPM"/*-linux-arm64*@*
+    rm -rf "$PNPM"/*-linux-x64*@*
+    rm -rf "$PNPM"/*-freebsd-*@*
+    rm -rf "$PNPM"/*-android-*@*
+elif [ "$TARGET" = "linux" ]; then
+    # Building for Linux — remove macOS and Windows native binaries
+    rm -rf "$PNPM"/*-darwin-arm64@*
+    rm -rf "$PNPM"/*-darwin-x64@*
+    rm -rf "$PNPM"/*-darwin-universal@*
+    rm -rf "$PNPM"/*-mac-arm64*@*
+    rm -rf "$PNPM"/*-win32-*@*
+    rm -rf "$PNPM"/*-windows-*@*
+    rm -rf "$PNPM"/*-freebsd-*@*
+    rm -rf "$PNPM"/*-android-*@*
+fi
+
+# Also remove rollup platform binaries (build tool, not needed at runtime)
+rm -rf "$PNPM"/@rollup+rollup-*@*
 
 # ── 5. Clean broken symlinks (from removed .pnpm packages) ──────────────────
 echo "[stage-openclaw] Cleaning broken symlinks..."
@@ -150,6 +197,35 @@ for pkg in "$PNPM"/@wasm-audio-decoders+opus-ml@*/node_modules/@wasm-audio-decod
            "$PNPM"/ogg-opus-decoder@*/node_modules/ogg-opus-decoder; do
     [ -d "$pkg/dist" ] && [ -d "$pkg/src" ] && rm -rf "$pkg/src" 2>/dev/null
 done
+
+# pdfjs-dist: also strip types/ and CMaps (server needs build/ only — saves ~20MB)
+rm -rf "$PNPM"/pdfjs-dist@*/node_modules/pdfjs-dist/types 2>/dev/null
+rm -rf "$PNPM"/pdfjs-dist@*/node_modules/pdfjs-dist/cmaps 2>/dev/null
+rm -rf "$PNPM"/pdfjs-dist@*/node_modules/pdfjs-dist/standard_fonts 2>/dev/null
+
+# @line/bot-sdk: strip duplicate ESM + docs (15MB package, CJS is used)
+rm -rf "$PNPM"/@line+bot-sdk@*/node_modules/@line/bot-sdk/dist/esm 2>/dev/null
+
+# @matrix-org: strip prebuilds for other platforms (12MB)
+find "$PNPM"/@matrix-org+matrix-sdk-crypto-nodejs@* -name "*.node" -not -name "*darwin*" -not -name "*arm64*" -delete 2>/dev/null || true
+
+# openai: strip duplicate versions — keep only the latest (two 13MB copies)
+OPENAI_VERSIONS=$(ls -d "$PNPM"/openai@* 2>/dev/null | sort -V)
+OPENAI_COUNT=$(echo "$OPENAI_VERSIONS" | wc -l | tr -d ' ')
+if [ "$OPENAI_COUNT" -gt 1 ]; then
+    echo "$OPENAI_VERSIONS" | head -n -1 | while read old; do
+        rm -rf "$old" 2>/dev/null
+    done
+fi
+
+# @larksuiteoapi: also strip lib/cjs (redundant with lib/esm) — saves ~10MB
+rm -rf "$PNPM"/@larksuiteoapi+node-sdk@*/node_modules/@larksuiteoapi/node-sdk/cjs 2>/dev/null
+
+# Strip LICENSE files from all packages (legal text, not needed at runtime)
+find "$DEST/node_modules" -maxdepth 5 -name "LICENSE*" -type f -delete 2>/dev/null || true
+
+# Strip remaining .ts source files from packages (compiled JS is used)
+find "$DEST/node_modules/.pnpm" -maxdepth 7 -name "*.ts" -not -name "*.d.ts" -not -path "*/dist/*" -type f -delete 2>/dev/null || true
 
 # ── 8. Report final size ────────────────────────────────────────────────────
 TOTAL=$(du -sm "$DEST" | cut -f1)

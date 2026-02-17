@@ -19,7 +19,16 @@ import { tokens, prices, wallets, transactions } from './db/schema';
 import { eq, and, or, inArray, desc } from 'drizzle-orm';
 
 const fastify = Fastify({
-    logger: { level: 'error' },
+    logger: {
+        level: process.env.LOG_LEVEL || 'info',
+        transport: {
+            target: 'pino-pretty',
+            options: {
+                translateTime: 'HH:MM:ss Z',
+                ignore: 'pid,hostname',
+            },
+        },
+    },
 });
 
 fastify.register(cors, {
@@ -484,7 +493,7 @@ fastify.post('/v1/wallets/track', async (request: any, reply) => {
     }
 
     try {
-        db.insert(wallets).values({
+        await db.insert(wallets).values({
             address,
             chain: chain.toUpperCase(),
             label: label || null,
@@ -492,8 +501,6 @@ fastify.post('/v1/wallets/track', async (request: any, reply) => {
         }).onConflictDoUpdate({
             target: wallets.address,
             set: { lastChecked: 0 } // Force a refresh
-        }).catch(e => {
-            if (!e.message.includes('TIMEOUT')) console.error(`[WalletTrack] DB Error: ${e.message}`);
         });
 
         // Trigger immediate sync

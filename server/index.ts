@@ -50,8 +50,79 @@ if (!fs.existsSync(dataDir)) {
 const sqlite = new Database(DB_PATH);
 export const db = drizzle(sqlite, { schema });
 
-// Auto-migration: ensure new tables exist on existing databases
+// Auto-migration: ensure ALL tables exist (critical for fresh installs on Windows/Mac/Linux)
 sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS conversations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id INTEGER REFERENCES conversations(id),
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        metadata TEXT,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+    CREATE TABLE IF NOT EXISTS wallets (
+        address TEXT PRIMARY KEY,
+        chain_type TEXT NOT NULL DEFAULT 'evm',
+        label TEXT,
+        added_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+    CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        total_value TEXT NOT NULL,
+        total_change_24h TEXT NOT NULL,
+        assets_json TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+    CREATE TABLE IF NOT EXISTS asset_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol TEXT NOT NULL,
+        chain TEXT NOT NULL,
+        balance TEXT NOT NULL,
+        value TEXT NOT NULL,
+        price TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_asset_history_symbol_timestamp
+    ON asset_history(symbol, timestamp DESC);
+    CREATE TABLE IF NOT EXISTS alerts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        metadata TEXT,
+        is_read INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_alerts_is_read ON alerts(is_read, created_at DESC);
+    CREATE TABLE IF NOT EXISTS transactions (
+        signature TEXT PRIMARY KEY,
+        wallet_address TEXT NOT NULL,
+        chain TEXT NOT NULL,
+        type TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        amount TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        label TEXT,
+        raw_data TEXT,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_transactions_timestamp ON transactions(timestamp DESC);
     CREATE TABLE IF NOT EXISTS rules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         text TEXT NOT NULL,
