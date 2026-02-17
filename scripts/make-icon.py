@@ -226,9 +226,9 @@ def generate_linux_icons(source_img, output_dir):
 
 def main():
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    input_file = os.path.join(base, 'pfp final.png')
     build_dir = os.path.join(base, 'build')
     public_dir = os.path.join(base, 'public')
+    input_file = os.path.join(public_dir, 'pfp-final.png')
 
     if not os.path.exists(input_file):
         print(f"ERROR: Source image not found: {input_file}")

@@ -72,3 +72,4 @@ server/openclaw-core/data/
 SOUL.md
 openclaw.json
 cron-store.json
+server/openclaw-core-prod/
