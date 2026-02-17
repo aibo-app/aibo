@@ -6,12 +6,16 @@ import type { WebSocket as WebSocketType } from 'ws';
 import { db } from '../index';
 import { wallets } from '../db/schema';
 import { PortfolioService } from './PortfolioService';
+import { backendTeamClient } from './BackendTeamClient';
 import { and, eq } from 'drizzle-orm';
 
 /**
  * OpenClawClient manages the real-time connection between the Aibō Desktop app (The Body)
  * and the OpenClaw Brain (The Agent). It facilitates tool execution and intent delegation.
  */
+/** Handler function for a node command */
+type CommandHandler = (args: Record<string, any>) => Promise<any>;
+
 export class OpenClawClient {
     private ws: WebSocketType | null = null;
     private url: string;
@@ -32,16 +36,49 @@ export class OpenClawClient {
      */
     private readonly SUPPORTED_ACTIONS = ['set_status_color', 'vibrate_mascot', 'pulse_voice', 'navigate_to'];
 
+    /** Dynamic command handler registry — new skills register handlers here */
+    private commandHandlers = new Map<string, CommandHandler>();
+
     private static instance: OpenClawClient;
     private pendingRequests = new Map<string, { resolve: (val: string) => void, reject: (err: Error) => void }>();
+    private reconnectAttempts = 0;
 
-    private constructor(gatewayUrl: string = 'ws://localhost:3000') {
+    private constructor(gatewayUrl: string = 'ws://127.0.0.1:18789') {
         this.url = gatewayUrl;
+        this.registerBuiltinCommands();
+    }
+
+    /**
+     * Register all built-in command handlers.
+     * New skills can add handlers via registerCommand() at startup.
+     */
+    private registerBuiltinCommands(): void {
+        this.registerCommand('portfolio.get_summary', () => this.getPortfolioSummary());
+        this.registerCommand('portfolio.get_detailed_summary', () => this.getDetailedPortfolioSummary());
+        this.registerCommand('portfolio.get_transactions', (args) => this.getRecentTransactions(args.wallets || []));
+        this.registerCommand('wallet.add', (args) => this.addWallet(args as { address: string; chainType: string; label?: string }));
+        this.registerCommand('body.get_state', () => Promise.resolve(this.bodyState));
+        this.registerCommand('market.get_price', (args) => this.getMarketPrice(args as { symbol: string }));
+        this.registerCommand('discovery.get_trending', () => this.getTrendingAlpha());
+        this.registerCommand('discovery.get_clanker', () => this.getClankerAlpha());
+    }
+
+    /** Register a command handler. Can be called by skill modules at startup. */
+    public registerCommand(name: string, handler: CommandHandler): void {
+        this.commandHandlers.set(name, handler);
+    }
+
+    /** Get all registered command names (used for handshake + config). */
+    public getRegisteredCommands(): string[] {
+        return Array.from(this.commandHandlers.keys());
     }
 
     public static getInstance(gatewayUrl?: string): OpenClawClient {
         if (!OpenClawClient.instance) {
             OpenClawClient.instance = new OpenClawClient(gatewayUrl);
+        } else if (gatewayUrl && OpenClawClient.instance.url !== gatewayUrl) {
+            // Startup code may call this after early singleton creation (e.g. from WS handler)
+            OpenClawClient.instance.url = gatewayUrl;
         }
         return OpenClawClient.instance;
     }
@@ -52,12 +89,14 @@ export class OpenClawClient {
             this.ws.close();
         }
 
-        console.log(`[OpenClaw] Connecting to Gateway at ${this.url}...`);
         this.ws = new WebSocket(this.url) as WebSocketType;
 
         this.ws.on('open', () => {
-            console.log('[OpenClaw] Connected to Gateway');
+            if (this.reconnectAttempts > 0) {
+                console.log(`🟢 [OpenClaw] Connected after ${this.reconnectAttempts} attempt(s)`);
+            }
             this.isConnected = true;
+            this.reconnectAttempts = 0;
             this.startHandshake();
             this.startMarketMonitoring();
         });
@@ -74,18 +113,28 @@ export class OpenClawClient {
             }
         });
 
-        this.ws.on('close', () => {
-            console.log('[OpenClaw] Disconnected. Reconnecting in 5s...');
+        this.ws.on('close', (code, reason) => {
+            const wasConnected = this.isConnected;
             this.isConnected = false;
             this.stopMarketMonitoring();
+            // Only log on actual disconnects, not during reconnection attempts
+            if (wasConnected) {
+                const reasonStr = reason ? ` reason: ${reason.toString()}` : '';
+                console.log(`[OpenClaw] Disconnected (code: ${code}${reasonStr}). Reconnecting...`);
+            }
+            this.reconnectAttempts++;
             this.scheduleReconnect();
         });
 
-        this.ws.on('error', (err: any) => {
-            // Only show meaningful error context
-            const code = err.code || 'UNKNOWN';
-            console.error(`[OpenClaw] Connection error (${code}):`, err.message || 'Gateway not reachable');
-            this.ws?.close();
+        this.ws.on('error', (error: any) => {
+            // Only log first error, suppress during reconnection loop
+            if (this.reconnectAttempts === 0) {
+                const detail = error.message || error.code || String(error);
+                console.warn(`[OpenClaw] Connection failed: ${detail}`);
+            }
+            if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) {
+                this.ws?.close();
+            }
         });
     }
 
@@ -99,6 +148,9 @@ export class OpenClawClient {
     }
 
     private startHandshake() {
+        const commands = this.getRegisteredCommands();
+        console.log(`[OpenClaw] Handshake declaring ${commands.length} commands: ${commands.join(', ')}`);
+
         this.send({
             type: 'req',
             id: `handshake-${Date.now()}`,
@@ -118,7 +170,7 @@ export class OpenClawClient {
                 minProtocol: 3,
                 maxProtocol: 3,
                 scopes: ['portfolio:read', 'wallet:manage', 'market:read', 'operator.admin'],
-                commands: ['portfolio.get_summary', 'portfolio.get_detailed_summary', 'portfolio.get_transactions', 'wallet.add']
+                commands
             }
         });
     }
@@ -128,20 +180,12 @@ export class OpenClawClient {
         if (message.type === 'node.call') {
             const { id, method, params } = message;
             try {
-                let result;
-                switch (method) {
-                    case 'get_portfolio':
-                        result = await this.getPortfolioSummary();
-                        break;
-                    case 'add_wallet':
-                        result = await this.addWallet(params);
-                        break;
-                    case 'get_market_price':
-                        result = await this.getMarketPrice(params);
-                        break;
-                    default:
-                        throw new Error(`Method ${method} not supported`);
+                // Try registry first, fall back to legacy method names
+                const handler = this.commandHandlers.get(method);
+                if (!handler) {
+                    throw new Error(`Method ${method} not supported. Registered: ${this.getRegisteredCommands().join(', ')}`);
                 }
+                const result = await handler(params || {});
                 this.send({ type: 'res', id, ok: true, payload: result });
             } catch (err) {
                 const error = err instanceof Error ? err : new Error(String(err));
@@ -218,7 +262,7 @@ export class OpenClawClient {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private onActionCallback: ((action: any) => void) | null = null;
-    private actionListeners: ((action: any) => void)[] = [];
+    private actionListeners: Set<(action: any) => void> = new Set();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     public setOnAction(callback: (action: any) => void) {
@@ -227,7 +271,12 @@ export class OpenClawClient {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     public addActionListener(callback: (action: any) => void) {
-        this.actionListeners.push(callback);
+        this.actionListeners.add(callback);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    public removeActionListener(callback: (action: any) => void) {
+        this.actionListeners.delete(callback);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -260,8 +309,17 @@ export class OpenClawClient {
             const { resolve } = this.pendingRequests.get(runId)!;
             this.pendingRequests.delete(runId);
 
-            const text = message?.content?.[0]?.text || JSON.stringify(message);
+            console.log(`[OpenClaw] 🔍 Full chat event payload:`, JSON.stringify(payload, null, 2));
+
+            if (!message) {
+                console.error(`[OpenClaw] ❌ Message is undefined in final state for runId ${runId}`);
+                resolve("Sorry, I didn't receive a response from my brain.");
+                return;
+            }
+
+            const text = message?.content?.[0]?.text || JSON.stringify(message) || '';
             console.log(`[OpenClaw] Resolved chat request ${runId}`);
+            console.log(`[OpenClaw] 📝 Extracted text (${text.length} chars):`, text.substring(0, 200));
 
             this.detectAndDispatchActions(text);
             resolve(text);
@@ -299,7 +357,13 @@ export class OpenClawClient {
             this.onActionCallback(actionPayload);
         }
 
-        this.actionListeners.forEach(listener => listener(actionPayload));
+        this.actionListeners.forEach(listener => {
+            try {
+                listener(actionPayload);
+            } catch (error) {
+                console.error('[OpenClaw] Action listener error:', error);
+            }
+        });
     }
 
     public async sendMessage(text: string): Promise<string> {
@@ -310,14 +374,14 @@ export class OpenClawClient {
         const requestId = Math.random().toString(36).substring(7);
 
         return new Promise((resolve, reject) => {
-            // timeout 30s
+            // timeout 90s — tool calls (portfolio fetch) can take 15s+ per round-trip
             const timeout = setTimeout(() => {
                 if (this.pendingRequests.has(requestId)) {
                     this.pendingRequests.delete(requestId);
-                    console.error(`[OpenClaw] Request ${requestId} timed out after 30s`);
+                    console.error(`[OpenClaw] Request ${requestId} timed out after 90s`);
                     reject(new Error('Brain timed out'));
                 }
-            }, 30000);
+            }, 90000);
 
             this.pendingRequests.set(requestId, {
                 resolve: (res) => { clearTimeout(timeout); resolve(res); },
@@ -345,30 +409,13 @@ export class OpenClawClient {
 
         try {
             const args = paramsJSON ? JSON.parse(paramsJSON) : {};
-            let result;
+            const handler = this.commandHandlers.get(command);
 
-            switch (command) {
-                case 'portfolio.get_summary':
-                    result = await this.getPortfolioSummary();
-                    break;
-                case 'portfolio.get_detailed_summary':
-                    result = await this.getDetailedPortfolioSummary();
-                    break;
-                case 'portfolio.get_transactions':
-                    result = await this.getRecentTransactions(args.wallets || []);
-                    break;
-                case 'wallet.add':
-                    result = await this.addWallet(args);
-                    break;
-                case 'body.get_state':
-                    result = this.bodyState;
-                    break;
-                case 'market.get_price':
-                    result = await this.getMarketPrice(args);
-                    break;
-                default:
-                    throw new Error(`Unknown command: ${command}`);
+            if (!handler) {
+                throw new Error(`Unknown command: ${command}. Registered: ${this.getRegisteredCommands().join(', ')}`);
             }
+
+            const result = await handler(args);
 
             this.send({
                 type: 'req',
@@ -405,29 +452,12 @@ export class OpenClawClient {
         console.log(`[OpenClaw] Invoked tool (legacy): ${tool}`, args);
 
         try {
-            let result;
-            switch (tool) {
-                case 'portfolio.get_summary':
-                    result = await this.getPortfolioSummary();
-                    break;
-                case 'portfolio.get_detailed_summary':
-                    result = await this.getDetailedPortfolioSummary();
-                    break;
-                case 'portfolio.get_transactions':
-                    result = await this.getRecentTransactions(args.wallets || []);
-                    break;
-                case 'body.get_state':
-                    result = this.bodyState;
-                    break;
-                case 'wallet.add':
-                    result = await this.addWallet(args);
-                    break;
-                case 'market.get_price':
-                    result = await this.getMarketPrice(args);
-                    break;
-                default:
-                    throw new Error(`Unknown tool: ${tool}`);
+            const handler = this.commandHandlers.get(tool);
+            if (!handler) {
+                throw new Error(`Unknown tool: ${tool}. Registered: ${this.getRegisteredCommands().join(', ')}`);
             }
+
+            const result = await handler(args || {});
 
             this.send({
                 type: 'node.result',
@@ -467,23 +497,39 @@ export class OpenClawClient {
 
     // --- Tool Implementations ---
 
-    private async getPortfolioSummary() {
-        // Fetch wallets from DB
+    /** Race a promise against a timeout — brain commands should not block for 10s+ */
+    private raceTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+        return Promise.race([
+            promise,
+            new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))
+        ]);
+    }
+
+    private async getWalletList() {
         const storedWallets = await db.select().from(wallets);
-
-        if (storedWallets.length === 0) {
-            return "No wallets are currently being tracked. Please add a wallet in the Desktop Aibo UI.";
-        }
-
-        const mappedWallets = storedWallets.map(w => ({
+        return storedWallets.map(w => ({
             address: w.address,
             chainType: w.chainType as 'evm' | 'solana',
             label: w.label || undefined
         }));
+    }
 
-        const portfolio = await PortfolioService.getAggregatedPortfolio(mappedWallets);
+    private async getPortfolioSummary() {
+        const mappedWallets = await this.getWalletList();
+        if (mappedWallets.length === 0) {
+            return "No wallets are currently being tracked. Please add a wallet in the Desktop Aibo UI.";
+        }
 
-        // Format for Agent consumption (Text summary)
+        const portfolio = await this.raceTimeout(
+            PortfolioService.getAggregatedPortfolio(mappedWallets),
+            5000,
+            { assets: [], totalValue: 0, totalChange24h: 0 }
+        );
+
+        if (!portfolio.assets || portfolio.assets.length === 0) {
+            return "Portfolio data is still loading. Try again in a moment.";
+        }
+
         const topAssets = portfolio.assets
             .sort((a: any, b: any) => b.value - a.value)
             .slice(0, 5)
@@ -496,23 +542,29 @@ export class OpenClawClient {
     private async getMarketPrice(args: { symbol: string }) {
         if (!args.symbol) throw new Error('Symbol argument is required');
 
-        const stats = await PortfolioService.getAssetStats(args.symbol);
+        const stats = await this.raceTimeout(
+            PortfolioService.getAssetStats(args.symbol),
+            5000,
+            null
+        );
         if (!stats) return `Could not find price data for ${args.symbol}`;
 
-        return `${stats.name} (${stats.symbol}): $${stats.price} (24h: ${stats.change}%)`;
+        return `${args.symbol} (${stats.symbol}): $${stats.price} (24h: ${stats.change24h}%)`;
     }
 
     private async getDetailedPortfolioSummary() {
-        const storedWallets = await db.select().from(wallets);
-        if (storedWallets.length === 0) return { error: "No wallets tracked" };
+        const mappedWallets = await this.getWalletList();
+        if (mappedWallets.length === 0) return { error: "No wallets tracked" };
 
-        const mappedWallets = storedWallets.map(w => ({
-            address: w.address,
-            chainType: w.chainType as 'evm' | 'solana',
-            label: w.label || undefined
-        }));
+        const portfolio = await this.raceTimeout(
+            PortfolioService.getAggregatedPortfolio(mappedWallets),
+            5000,
+            { assets: [], totalValue: 0, totalChange24h: 0 }
+        );
 
-        const portfolio = await PortfolioService.getAggregatedPortfolio(mappedWallets);
+        if (!portfolio.assets || portfolio.assets.length === 0) {
+            return { error: "Portfolio data is still loading. Try again in a moment." };
+        }
         return portfolio;
     }
 
@@ -521,18 +573,15 @@ export class OpenClawClient {
         if (walletsToFetch && walletsToFetch.length > 0) {
             mappedWallets = walletsToFetch;
         } else {
-            const storedWallets = await db.select().from(wallets);
-            if (storedWallets.length === 0) return { error: "No wallets tracked" };
-
-            mappedWallets = storedWallets.map(w => ({
-                address: w.address,
-                chainType: w.chainType as 'evm' | 'solana',
-                label: w.label || undefined
-            }));
+            mappedWallets = await this.getWalletList();
+            if (mappedWallets.length === 0) return { error: "No wallets tracked" };
         }
 
-        const txs = await PortfolioService.getRecentTransactions(mappedWallets);
-        // Map to simpler format for Agent to avoid token overflow
+        const txs = await this.raceTimeout(
+            PortfolioService.getRecentTransactions(mappedWallets),
+            5000,
+            [] as any[]
+        );
         return txs.slice(0, 10).map(t => ({
             type: t.type,
             amount: t.amount,
@@ -571,6 +620,24 @@ export class OpenClawClient {
         });
 
         return `Successfully added ${type.toUpperCase()} wallet: ${args.address}${args.label ? ` (${args.label})` : ''}. Tracking will begin shortly.`;
+    }
+
+    private async getTrendingAlpha() {
+        const trending = await backendTeamClient.getTrendingNewTokens(5);
+        if (trending.length === 0) return "No trending tokens discovered on Base at the moment.";
+
+        return trending.map(t =>
+            `🔥 ${t.symbol} (${t.name}): $${t.price < 0.01 ? t.price.toFixed(6) : t.price.toFixed(2)} | Liq: $${(t.liquidity / 1000).toFixed(1)}k | 24h: ${t.priceChange24h.toFixed(1)}% | Score: ${t.trendingScore?.toFixed(0)}`
+        ).join('\n');
+    }
+
+    private async getClankerAlpha() {
+        const clanker = await backendTeamClient.getClankerTokens();
+        if (clanker.length === 0) return "No new AI tokens from Clanker detected recently.";
+
+        return clanker.slice(0, 5).map(t =>
+            `🤖 ${t.symbol}: $${t.price < 0.01 ? t.price.toFixed(6) : t.price.toFixed(2)} | 24h: ${t.priceChange24h.toFixed(1)}% | Via: ${t.launchpadDetected}`
+        ).join('\n');
     }
 
     // --- Monitoring Logic ---

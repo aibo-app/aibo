@@ -1,0 +1,24 @@
+<svg viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <mask id="feature-mask-tray">
+            <rect x="0" y="0" width="128" height="128" fill="white" />
+            <rect x="33" y="41" width="18" height="26" rx="4" fill="black" />
+            <rect x="77" y="41" width="18" height="26" rx="4" fill="black" />
+            <rect x="57" y="78" width="14" height="6" rx="2" fill="black" />
+        </mask>
+    </defs>
+    <g transform="translate(0, 12)">
+        <!-- Antenna -->
+        <rect x="62" y="4" width="4" height="25" rx="2" fill="#2c5bf6" />
+        <circle cx="64" cy="4" r="6" fill="#2c5bf6" />
+
+        <!-- Head outline -->
+        <path fillRule="evenodd" clipRule="evenodd"
+            d="M28 26C20.268 26 14 32.268 14 40V88C14 95.732 20.268 102 28 102H100C107.732 102 114 95.732 114 88V40C114 32.268 107.732 26 100 26H28ZM28 34C24.6863 34 22 36.6863 22 40V88C22 91.3137 24.6863 94 28 94H100C103.314 94 106 91.3137 106 88V40C106 36.6863 103.314 34 100 34H28Z"
+            fill="#2c5bf6"
+        />
+
+        <!-- Face with eyes and mouth cutouts -->
+        <rect x="24" y="36" width="80" height="56" rx="4" fill="#2c5bf6" mask="url(#feature-mask-tray)" />
+    </g>
+</svg>

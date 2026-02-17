@@ -1,5 +1,5 @@
-// Initializing database connection
-import Database from 'better-sqlite3';
+import * as BetterSqlite3 from 'better-sqlite3';
+const Database = (BetterSqlite3 as any).default || BetterSqlite3;
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -27,6 +27,7 @@ db.exec(`
         conversation_id INTEGER REFERENCES conversations(id),
         role TEXT NOT NULL,
         content TEXT NOT NULL,
+        metadata TEXT,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
     );
 
@@ -42,7 +43,97 @@ db.exec(`
         label TEXT,
         added_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
     );
+
+    CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        total_value TEXT NOT NULL,
+        total_change_24h TEXT NOT NULL,
+        assets_json TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+
+    CREATE TABLE IF NOT EXISTS asset_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol TEXT NOT NULL,
+        chain TEXT NOT NULL,
+        balance TEXT NOT NULL,
+        value TEXT NOT NULL,
+        price TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_asset_history_symbol_timestamp
+    ON asset_history(symbol, timestamp DESC);
+
+    CREATE TABLE IF NOT EXISTS alerts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        metadata TEXT,
+        is_read INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+
+    CREATE TABLE IF NOT EXISTS transactions (
+        signature TEXT PRIMARY KEY,
+        wallet_address TEXT NOT NULL,
+        chain TEXT NOT NULL,
+        type TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        amount TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        label TEXT,
+        raw_data TEXT,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_alerts_created_at
+    ON alerts(created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_alerts_is_read
+    ON alerts(is_read, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_transactions_timestamp
+    ON transactions(timestamp DESC);
+
+    CREATE TABLE IF NOT EXISTS rules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        text TEXT NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+    );
+
+    CREATE TABLE IF NOT EXISTS rule_artifacts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rule_id INTEGER NOT NULL REFERENCES rules(id),
+        type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        output_path TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        compiled_at INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_rule_artifacts_rule_id
+    ON rule_artifacts(rule_id);
 `);
 
-console.log('Database initialized successfully.');
+// Seed 6 realistic wallets
+const initialWallets = [
+    { address: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e', chain_type: 'evm', label: 'Base Main' },
+    { address: '0x123f681646d4a755815f9cb19e1acc8565a0c2ac', chain_type: 'evm', label: 'Base Savings' },
+    { address: '0xdaaea0658ae0357736465389658f89582d1b6cd5', chain_type: 'evm', label: 'Base Yield' },
+    { address: '0x53461e64d03045095e7834578905345789012345', chain_type: 'evm', label: 'Base Trading' }
+];
+
+const insertWallet = db.prepare('INSERT OR IGNORE INTO wallets (address, chain_type, label) VALUES (?, ?, ?)');
+for (const wallet of initialWallets) {
+    insertWallet.run(wallet.address, wallet.chain_type, wallet.label);
+}
+
+console.log('Database initialized and seeded successfully.');
 db.close();

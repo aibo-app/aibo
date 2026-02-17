@@ -8,15 +8,24 @@
     },
     "dependencies": {
         "@fastify/cors": "^11.2.0",
+        "@fastify/rate-limit": "^10.1.1",
         "@solana/spl-token": "^0.4.14",
         "@solana/web3.js": "^1.98.4",
         "axios": "^1.13.5",
         "dotenv": "^17.2.3",
+        "drizzle-orm": "^0.45.1",
+        "evm-translator": "^0.3.9",
         "fastify": "^5.7.4",
+        "helius-sdk": "^2.1.0",
+        "ioredis": "^5.4.2",
+        "p-limit": "^6.1.0",
+        "postgres": "^3.4.8",
+        "@deepgram/sdk": "^3.9.0",
         "viem": "^2.45.1"
     },
     "devDependencies": {
         "@types/node": "^24.10.10",
+        "drizzle-kit": "^0.31.9",
         "ts-node": "^10.9.2",
         "ts-node-dev": "^2.0.0",
         "typescript": "~5.9.3"

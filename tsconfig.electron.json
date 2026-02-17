@@ -6,7 +6,9 @@
     "rootDir": "./electron",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./dist-electron/.tsbuildinfo"
   },
   "include": [
     "electron/**/*"

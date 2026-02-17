@@ -1,149 +1,361 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Panel, SectionTitle } from '../components/ui/Panel';
+import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
+import { API_BASE } from '../lib/api';
+import { createLogger } from '../utils/logger';
 
-const MOCK_CHATS = [
-    { id: 1, text: "Best performing asset this month?", time: "Today, 10:42 AM" },
-    { id: 2, text: "Explain recent Ethereum gas spike", time: "Yesterday, 4:15 PM" },
-    { id: 3, text: "Review my portfolio diversification", time: "Sep 28, 9:20 AM" },
-    { id: 4, text: "Solana vs Cardano comparison", time: "Sep 25, 2:30 PM" },
-];
+const log = createLogger('ChatPage');
+
+interface Message {
+    id: number;
+    conversationId: number;
+    role: 'user' | 'assistant';
+    content: string;
+    metadata?: {
+        toolCalls?: string[];
+        skills?: string[];
+        actions?: any[];
+    };
+    createdAt: number;
+}
+
+interface Conversation {
+    id: number;
+    title: string;
+    createdAt: number;
+    updatedAt: number;
+    lastMessage?: string;
+}
 
 export const ChatPage: React.FC = () => {
-    const [messages] = useState([
-        { role: 'user', content: 'What is my best performing asset this month?', time: '10:42 AM' },
-        {
-            role: 'assistant',
-            content: 'Based on your portfolio data, Bitcoin (BTC) is currently your top performer for the month. Here is a breakdown of the growth metrics:',
-            time: '10:42 AM',
-            table: true
-        }
-    ]);
+    const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
+    const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [sending, setSending] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Fetch conversations on mount
+    useEffect(() => {
+        loadConversations();
+    }, []);
+
+    // Load messages when conversation changes
+    useEffect(() => {
+        if (currentConversationId) {
+            loadMessages(currentConversationId);
+        }
+    }, [currentConversationId]);
+
+    // Auto-scroll to bottom when messages change
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    const loadConversations = async () => {
+        try {
+            const response = await fetch(`${API_BASE}/api/chat/conversations`);
+            const data = await response.json();
+            setConversations(data.conversations || []);
+
+            // If no conversations, create one
+            if (!data.conversations || data.conversations.length === 0) {
+                await createNewConversation();
+            } else {
+                // Select the most recent conversation
+                setCurrentConversationId(data.conversations[0].id);
+            }
+        } catch (error) {
+            log.error('Failed to load conversations:', error);
+        }
+    };
+
+    const loadMessages = async (conversationId: number) => {
+        setLoading(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/chat/${conversationId}/messages`);
+            const data = await response.json();
+            setMessages(data.messages || []);
+        } catch (error) {
+            log.error('Failed to load messages:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const createNewConversation = async () => {
+        try {
+            const response = await fetch(`${API_BASE}/api/chat/new`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: 'New Conversation' })
+            });
+            const data = await response.json();
+            setConversations([data.conversation, ...conversations]);
+            setCurrentConversationId(data.conversation.id);
+            setMessages([]);
+        } catch (error) {
+            log.error('Failed to create conversation:', error);
+        }
+    };
+
+    const sendMessage = async () => {
+        if (!input.trim() || !currentConversationId || sending) return;
+
+        const userMessage = input.trim();
+        setInput('');
+        setSending(true);
+
+        // Optimistic: show user message immediately
+        const optimisticId = -Date.now();
+        const optimisticUserMsg: Message = {
+            id: optimisticId,
+            conversationId: currentConversationId,
+            role: 'user',
+            content: userMessage,
+            createdAt: Date.now()
+        };
+        setMessages(prev => [...prev, optimisticUserMsg]);
+
+        try {
+            const response = await fetch(`${API_BASE}/api/chat/${currentConversationId}/message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: userMessage })
+            });
+
+            if (!response.ok) throw new Error('Failed to send message');
+
+            const data = await response.json();
+
+            // Replace optimistic message with real one and add assistant response
+            setMessages(prev => [
+                ...prev.filter(m => m.id !== optimisticId),
+                data.userMsg,
+                data.assistantMsg
+            ]);
+
+            // Refresh conversations list to update timestamps
+            loadConversations();
+        } catch (error) {
+            log.error('Failed to send message:', error);
+            // Remove optimistic message and restore input
+            setMessages(prev => prev.filter(m => m.id !== optimisticId));
+            setInput(userMessage);
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const handleKeyPress = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    };
+
+    const formatTime = (timestamp: number) => {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const isToday = date.toDateString() === now.toDateString();
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const isYesterday = date.toDateString() === yesterday.toDateString();
+
+        if (isToday) {
+            return `Today, ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+        } else if (isYesterday) {
+            return `Yesterday, ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+        } else {
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+    };
 
     return (
-        <div className="flex-1 flex overflow-hidden bg-beige p-6 gap-6 h-full">
-            {/* Sidebar History */}
-            <section className="w-80 flex flex-col gap-6 shrink-0 h-full">
-                <div className="soft-panel p-5 flex flex-col gap-4 flex-1 overflow-hidden">
-                    <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
-                        <span className="material-symbols-outlined text-text-muted">history</span>
-                        <h2 className="font-display font-bold text-lg text-text-main">Recent</h2>
-                    </div>
-                    <div className="overflow-y-auto flex-1 pr-1 space-y-3 custom-scrollbar">
-                        {MOCK_CHATS.map(chat => (
-                            <div key={chat.id} className="group p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors border border-transparent hover:border-gray-100">
-                                <div className="text-xs text-text-muted font-semibold mb-1">{chat.time}</div>
-                                <div className="text-sm font-medium text-text-main line-clamp-2">{chat.text}</div>
-                            </div>
-                        ))}
-                    </div>
+        <div className="flex-1 flex flex-col p-8 overflow-hidden bg-beige custom-scrollbar pb-10">
+            <PageHeader
+                title="AI Interface"
+                subtitle="Communicate with your neural portfolio assistant"
+            >
+                <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl border border-white shadow-soft">
+                    <span className="size-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
+                    <span className="text-[10px] font-bold text-text-muted uppercase tracking-[0.2em]">Neural Engine Online</span>
                 </div>
+            </PageHeader>
 
-                <div className="soft-panel p-5 flex flex-col gap-4 h-1/3 shrink-0">
-                    <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
-                        <span className="material-symbols-outlined text-text-muted">push_pin</span>
-                        <h2 className="font-display font-bold text-lg text-text-main">Pinned</h2>
-                    </div>
-                    <div className="space-y-2 overflow-y-auto pr-1 custom-scrollbar">
-                        {['Market Overview', 'Risk Analysis', 'Daily Summary'].map((item, i) => (
-                            <button key={i} className="w-full text-left p-2.5 rounded-lg bg-gray-50 hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-200 transition-all text-sm font-medium text-text-main flex items-center gap-2">
-                                <span className="material-symbols-outlined text-primary text-sm">trending_up</span>
-                                {item}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* Main Chat Area */}
-            <section className="flex-1 soft-panel flex flex-col relative overflow-hidden">
-                <header className="flex justify-between items-center p-6 border-b border-gray-100 bg-white/50 backdrop-blur-sm z-10 shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="size-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
-                            <span className="material-symbols-outlined">smart_toy</span>
-                        </div>
-                        <div>
-                            <h1 className="font-display font-bold text-xl text-text-main">Neural Core</h1>
-                            <p className="text-xs text-text-muted font-medium flex items-center gap-1.5">
-                                <span className="size-2 rounded-full bg-green-500 animate-pulse"></span>
-                                Online • v2.4 Active
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button className="size-8 rounded-lg bg-gray-50 hover:bg-gray-100 flex items-center justify-center text-text-muted transition-colors border border-gray-200">
-                            <span className="material-symbols-outlined text-sm">more_horiz</span>
-                        </button>
-                    </div>
-                </header>
-
-                <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-gradient-to-b from-white to-gray-50/50 custom-scrollbar">
-                    {messages.map((msg, idx) => (
-                        <div key={idx} className="flex gap-4 max-w-3xl mx-auto">
-                            {msg.role === 'user' ? (
-                                <div className="size-10 rounded-full bg-white shadow-soft border border-white shrink-0 overflow-hidden" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuDRbhgyUn6jkW20dDOnMpH_1-jPlYOa9Zl1YeFV9bYc4MUus5PTlyqty73mOkBOGSlc5xFq1dorT5OLlELpT-8b73OvnHS1jiMs8BwIQ--bV-YL-IS_kwsKx_eSIv0sEZ-wn022kvrUq1v7pe7MFjtsWlryPULlmLs0yBlDjzbly_UW9_WVLnOhCB9ZhSLOiY8FCGK1_ozB7KiBAJe4h-ZsCWP_12tEOiVAVfkTo_rJlA1ya86XNG0LAXBuZP4oLPdehoFs-D4AQFc")', backgroundSize: 'cover' }}></div>
-                            ) : (
-                                <div className="size-10 rounded-full bg-primary flex items-center justify-center shrink-0 shadow-soft text-white">
-                                    <span className="material-symbols-outlined text-xl">smart_toy</span>
+            <div className="flex-1 flex gap-6 overflow-hidden mt-2">
+                {/* Sidebar History */}
+                <section className="w-80 flex flex-col shrink-0 h-full">
+                    <Panel className="p-6 flex flex-col gap-4 flex-1 bg-white">
+                        <SectionTitle
+                            title="Conversations"
+                            icon="history"
+                            action={
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="size-8 !p-0"
+                                    onClick={createNewConversation}
+                                >
+                                    <span className="material-symbols-outlined text-base">add</span>
+                                </Button>
+                            }
+                        />
+                        <div className="overflow-y-auto flex-1 pr-1 space-y-1 custom-scrollbar">
+                            {conversations.map(convo => (
+                                <div
+                                    key={convo.id}
+                                    className={`group p-2.5 rounded-xl cursor-pointer transition-all border ${
+                                        currentConversationId === convo.id
+                                            ? 'bg-primary/5 border-primary/20 shadow-sm'
+                                            : 'hover:bg-beige/40 border-transparent hover:border-black/5 hover:shadow-sm'
+                                    }`}
+                                    onClick={() => setCurrentConversationId(convo.id)}
+                                >
+                                    <div className="text-[11px] text-text-muted/60 font-semibold mb-0.5 font-mono">
+                                        {formatTime(convo.updatedAt)}
+                                    </div>
+                                    <div className="text-xs font-bold text-text-main line-clamp-2 leading-snug tracking-tight">
+                                        {convo.title}
+                                    </div>
                                 </div>
-                            )}
+                            ))}
+                        </div>
+                    </Panel>
+                </section>
 
-                            <div className="flex-1">
-                                <div className={`p-4 rounded-xl shadow-sm border border-gray-100 inline-block ${msg.role === 'user' ? 'bg-white rounded-tl-none' : 'bg-white rounded-tl-none shadow-soft'}`}>
-                                    <p className="text-text-main text-sm leading-relaxed mb-1">{msg.content}</p>
+                {/* Main Chat Area */}
+                <Panel className="flex-1 flex flex-col bg-white overflow-hidden">
+                    <div className="p-6 pb-0">
+                        <SectionTitle
+                            title="Primary Stream"
+                            icon="smart_toy"
+                            action={
+                                <span className="text-[10px] text-text-muted/40 font-semibold uppercase tracking-widest italic leading-none flex items-center gap-1.5">
+                                    <span className="size-1.5 bg-green-500 rounded-full animate-pulse"></span> Live
+                                </span>
+                            }
+                        />
+                    </div>
 
-                                    {msg.table && (
-                                        <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-50/50 my-4 w-full">
-                                            <table className="w-full text-sm text-left">
-                                                <thead className="bg-gray-100 text-xs uppercase text-text-muted font-bold">
-                                                    <tr>
-                                                        <th className="px-4 py-3 font-display tracking-wider">Asset</th>
-                                                        <th className="px-4 py-3 font-display tracking-wider text-right">Price</th>
-                                                        <th className="px-4 py-3 font-display tracking-wider text-right">Growth</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-200 bg-white">
-                                                    <tr>
-                                                        <td className="px-4 py-3 font-medium text-text-main">Bitcoin</td>
-                                                        <td className="px-4 py-3 text-right tabular-nums">$68,420</td>
-                                                        <td className="px-4 py-3 text-right tabular-nums text-green-600 font-bold">+18.4%</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td className="px-4 py-3 font-medium text-text-main">Solana</td>
-                                                        <td className="px-4 py-3 text-right tabular-nums">$148.89</td>
-                                                        <td className="px-4 py-3 text-right tabular-nums text-green-600 font-bold">+12.4%</td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar text-text-main">
+                        {loading ? (
+                            <div className="flex items-center justify-center h-full">
+                                <div className="text-text-muted/40 text-sm font-semibold">Loading messages...</div>
+                            </div>
+                        ) : messages.length === 0 ? (
+                            <div className="flex items-center justify-center h-full">
+                                <div className="text-center max-w-md">
+                                    <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                                        <span className="material-symbols-outlined text-3xl text-primary">smart_toy</span>
+                                    </div>
+                                    <h3 className="text-lg font-bold text-text-main mb-2">Start a conversation</h3>
+                                    <p className="text-sm text-text-muted/60">Ask about your portfolio, check prices, or get market insights.</p>
+                                </div>
+                            </div>
+                        ) : (
+                            messages.map((msg, idx) => (
+                                <div key={msg.id || idx} className="flex gap-6 max-w-4xl mx-auto">
+                                    {msg.role === 'user' ? (
+                                        <div className="size-11 rounded-xl bg-gray-100 border border-black/5 shrink-0 flex items-center justify-center">
+                                            <span className="material-symbols-outlined text-xl text-text-muted">person</span>
+                                        </div>
+                                    ) : (
+                                        <div className="size-11 rounded-xl bg-primary flex items-center justify-center shrink-0 text-white shadow-sm">
+                                            <span className="material-symbols-outlined text-2xl">smart_toy</span>
                                         </div>
                                     )}
+
+                                    <div className="flex-1">
+                                        <div className={`p-6 rounded-2xl border border-black/5 leading-relaxed text-sm font-medium bg-white ${msg.role === 'assistant' ? 'chat-markdown' : ''}`}>
+                                            {msg.role === 'assistant' ? (
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                                            ) : (
+                                                <p className="tracking-tight whitespace-pre-wrap">{msg.content}</p>
+                                            )}
+
+                                            {/* Show skills/tools used */}
+                                            {msg.metadata && (msg.metadata.skills || msg.metadata.toolCalls) && (
+                                                <div className="mt-4 flex flex-wrap gap-2">
+                                                    {msg.metadata.skills?.map((skill, i) => (
+                                                        <span
+                                                            key={i}
+                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-bold"
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">extension</span>
+                                                            {skill}
+                                                        </span>
+                                                    ))}
+                                                    {msg.metadata.toolCalls?.map((tool, i) => (
+                                                        <span
+                                                            key={i}
+                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-100 text-text-muted text-xs font-bold"
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">build</span>
+                                                            {tool}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <span className="text-[10px] font-semibold text-text-muted/30 uppercase tracking-[0.2em] block mt-2 ml-1">
+                                            {formatTime(msg.createdAt)}
+                                        </span>
+                                    </div>
                                 </div>
-                                <span className="text-[10px] text-gray-400 font-medium block mt-1 ml-1">{msg.time}</span>
+                            ))
+                        )}
+
+                        {/* Loading indicator for assistant response */}
+                        {sending && (
+                            <div className="flex gap-6 max-w-4xl mx-auto">
+                                <div className="size-11 rounded-xl bg-primary flex items-center justify-center shrink-0 text-white shadow-sm">
+                                    <span className="material-symbols-outlined text-2xl">smart_toy</span>
+                                </div>
+                                <div className="flex-1">
+                                    <div className="p-6 rounded-2xl border border-black/5 bg-white">
+                                        <div className="flex items-center gap-2">
+                                            <div className="size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                            <div className="size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                            <div className="size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    <div className="p-6 pt-4 bg-white border-t border-gray-100 shrink-0">
+                        <div className="max-w-4xl mx-auto relative px-4">
+                            <div className="bg-gray-50 p-2.5 flex items-end gap-3 rounded-2xl border border-black/5 shadow-inset">
+                                <textarea
+                                    className="flex-1 bg-transparent border-none focus:ring-0 text-text-main placeholder:text-text-muted/40 text-sm font-bold resize-none py-4 max-h-32 outline-none tracking-tight"
+                                    placeholder="Ask about your portfolio..."
+                                    rows={1}
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={handleKeyPress}
+                                    disabled={sending || !currentConversationId}
+                                ></textarea>
+                                <Button
+                                    variant="primary"
+                                    className="size-11 !p-0 shrink-0 mb-1 mr-1"
+                                    onClick={sendMessage}
+                                    disabled={!input.trim() || sending || !currentConversationId}
+                                >
+                                    <span className="material-symbols-outlined text-xl">send</span>
+                                </Button>
                             </div>
                         </div>
-                    ))}
-                </div>
-
-                <div className="p-6 pt-2 bg-white/50 backdrop-blur-sm shrink-0">
-                    <div className="max-w-3xl mx-auto relative">
-                        <div className="shadow-well bg-[#ece9d8] rounded-2xl p-2 flex items-end gap-2 border border-black/5">
-                            <button className="p-2 text-text-muted hover:text-primary transition-colors mb-0.5 ml-1">
-                                <span className="material-symbols-outlined">add_circle</span>
-                            </button>
-                            <textarea
-                                className="w-full bg-transparent border-none focus:ring-0 text-text-main placeholder:text-text-muted/70 text-sm resize-none py-3 max-h-32 outline-none"
-                                placeholder="Ask anything about your crypto assets..."
-                                rows={1}
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                            ></textarea>
-                            <button className="p-2 mb-0.5 rounded-xl bg-primary text-white shadow-button hover:bg-primary/90 transition-all flex items-center justify-center">
-                                <span className="material-symbols-outlined">send</span>
-                            </button>
-                        </div>
-                        <p className="text-center text-[10px] text-text-muted mt-3 font-medium">Aibō can make mistakes. Please verify important financial information.</p>
                     </div>
-                </div>
-            </section>
+                </Panel>
+            </div>
         </div>
     );
 };

@@ -21,5 +21,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     minimize: () => ipcRenderer.send('window-minimize'),
     maximize: () => ipcRenderer.send('window-maximize'),
     close: () => ipcRenderer.send('window-close'),
+    startDrag: (mouseX: number, mouseY: number) => ipcRenderer.send('assistant-drag-start', mouseX, mouseY),
+    dragMove: (mouseX: number, mouseY: number) => ipcRenderer.send('assistant-drag-move', mouseX, mouseY),
+    showNotification: (title: string, body: string) => ipcRenderer.send('show-notification', title, body),
+    onGlobalPushToTalk: (callback: (action: 'start' | 'stop') => void) => {
+        ipcRenderer.on('global-push-to-talk', (_event, action: 'start' | 'stop') => callback(action));
+    },
+    globalRecordingStopped: () => ipcRenderer.send('global-recording-stopped'),
     platform: process.platform,
 });

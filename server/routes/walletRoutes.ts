@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { wallets } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { db } from '../index';
+import { backendTeamClient } from '../services/BackendTeamClient';
 
 export default async function walletRoutes(fastify: FastifyInstance) {
     // GET all wallets
@@ -24,6 +25,11 @@ export default async function walletRoutes(fastify: FastifyInstance) {
                 label: label || null,
                 addedAt: Date.now(),
             });
+
+            // Register for real-time tracking in backend-team
+            backendTeamClient.trackWallet(address, chainType || 'evm', label)
+                .catch(e => console.error(`[WalletSync] Failed to register ${address} for tracking:`, e.message));
+
             return { success: true, address, chainType: chainType || 'evm' };
         } catch (err: unknown) {
             if (err && typeof err === 'object' && 'code' in err && err.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {

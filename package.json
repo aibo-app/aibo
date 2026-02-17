@@ -4,14 +4,20 @@
   "version": "0.1.0",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\" \"npm run dev:server\"",
-    "predev": "lsof -t -i :3001,18789 | xargs kill -9 2>/dev/null || true",
+    "dev": "concurrently --handle-signals --kill-others --kill-others-on-fail \"npm run dev:vite\" \"npm run dev:electron\" \"npm run dev:server\" \"npm run dev:backend:delayed\"",
+    "dev:backend:delayed": "sleep 5 && if [ -d backend-team ]; then cd backend-team && npm run dev; else echo 'Unknown backend-team folder, stepping over...'; fi",
+    "predev": "bash scripts/cleanup-ports.sh",
     "dev:vite": "vite",
-    "dev:electron": "wait-on tcp:5173 && wait-on tcp:3001 && tsc -p tsconfig.electron.json && cross-env NODE_ENV=development electron .",
+    "dev:electron": "wait-on tcp:5173 && tsc -p tsconfig.electron.json && env -u ELECTRON_RUN_AS_NODE NODE_ENV=development electron .",
     "dev:server": "ts-node-dev --respawn --transpile-only server/index.ts",
-    "build": "tsc -b && vite build && tsc -p tsconfig.electron.json && electron-builder",
-    "build:mac": "tsc -b && vite build && tsc -p tsconfig.electron.json && electron-builder --mac",
-    "build:win": "tsc -b && vite build && tsc -p tsconfig.electron.json && electron-builder --win",
+    "dev:backend": "if [ -d backend-team ]; then cd backend-team && npm run dev; else echo 'Backend team not found, skipping'; fi",
+    "cleanup": "bash scripts/cleanup-ports.sh",
+    "icon:generate": "python3 scripts/make-icon.py",
+    "db:init": "ts-node server/init-db.ts",
+    "build:openclaw": "pnpm --dir server/openclaw-core build && bash scripts/stage-openclaw.sh",
+    "build": "tsc -b && vite build && tsc -p tsconfig.electron.json && tsc -p tsconfig.server.json && npm run build:openclaw && electron-builder",
+    "build:mac": "tsc -b && vite build && tsc -p tsconfig.electron.json && tsc -p tsconfig.server.json && npm run build:openclaw && electron-builder --mac",
+    "build:win": "tsc -b && vite build && tsc -p tsconfig.electron.json && tsc -p tsconfig.server.json && npm run build:openclaw && electron-builder --win",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -19,53 +25,102 @@
     "appId": "com.aibo.desktop",
     "productName": "Aibō",
     "directories": {
-      "output": "dist"
+      "output": "release"
     },
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
-      "public/**/*"
+      "dist-server/**/*",
+      "public/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**",
+      "node_modules/bindings/**",
+      "node_modules/file-uri-to-path/**",
+      "node_modules/prebuild-install/**"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "aibo-app",
+      "repo": "aibo",
+      "releaseType": "release"
+    },
+    "extraResources": [
+      {
+        "from": "server/openclaw-core-prod",
+        "to": "openclaw-core",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "mac": {
       "target": [
         "dmg",
         "zip"
       ],
-      "icon": "public/icon.png"
+      "icon": "public/icon.png",
+      "category": "public.app-category.finance",
+      "darkModeSupport": true
+    },
+    "dmg": {
+      "title": "Aibō",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "win": {
       "target": "nsis",
       "icon": "public/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/icon.png",
+      "uninstallerIcon": "public/icon.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "public/icon.png",
+      "category": "Finance"
     }
   },
   "dependencies": {
+    "@fastify/compress": "^8.3.1",
     "@fastify/cors": "^11.2.0",
     "@fastify/multipart": "^9.4.0",
     "@fastify/websocket": "^11.2.0",
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.5.0",
-    "@ricky0123/vad-react": "^0.0.36",
-    "@ricky0123/vad-web": "^0.0.30",
-    "@solana/spl-token": "^0.4.14",
-    "@solana/web3.js": "^1.98.4",
-    "@types/three": "^0.182.0",
-    "@types/ws": "^8.18.1",
     "axios": "^1.13.4",
     "better-sqlite3": "^12.6.2",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.1",
     "fastify": "^5.7.4",
-    "form-data": "^4.0.5",
-    "framer-motion": "^12.30.0",
+    "js-tiktoken": "^1.0.21",
     "lucide-react": "^0.563.0",
+    "node-edge-tts": "^1.2.10",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.13.0",
     "recharts": "^3.7.0",
-    "three": "^0.182.0",
-    "viem": "^2.45.1",
+    "remark-gfm": "^4.0.1",
     "ws": "^8.19.0",
-    "zod": "^4.3.6"
+    "yaml": "^2.8.2",
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -76,11 +131,12 @@
     "@types/node": "^24.10.10",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.24",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
-    "electron": "^34.0.2",
+    "electron": "^34.5.8",
     "electron-builder": "^25.1.8",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",

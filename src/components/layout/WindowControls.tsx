@@ -52,7 +52,7 @@ export const MacWindowControls = () => {
             <div onClick={handleClose} style={{
                 width: '13px', height: '13px', borderRadius: '50%',
                 ...(showColor ? redStyle : grayStyle),
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                 transition: 'background 0.2s, border 0.2s'
             }}>
                 {isHovered && <X size={8} color="#4c0002" strokeWidth={3} />}
@@ -62,7 +62,7 @@ export const MacWindowControls = () => {
             <div onClick={handleMinimize} style={{
                 width: '13px', height: '13px', borderRadius: '50%',
                 ...(showColor ? yellowStyle : grayStyle),
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                 transition: 'background 0.2s, border 0.2s'
             }}>
                 {isHovered && <Minus size={8} color="#5c3c00" strokeWidth={3} />}
@@ -72,7 +72,7 @@ export const MacWindowControls = () => {
             <div onClick={handleMaximize} style={{
                 width: '13px', height: '13px', borderRadius: '50%',
                 ...(showColor ? greenStyle : grayStyle),
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                 transition: 'background 0.2s, border 0.2s'
             }}>
                 {isHovered && <div style={{ width: '6px', height: '6px', background: '#006500', borderRadius: '50%' }} />}
@@ -102,18 +102,18 @@ export const WindowControls = () => {
                 style={{
                     border: 'none',
                     background: 'transparent',
-                    color: 'var(--text-secondary)',
+                    color: '#6b7280',
                     width: '46px',
                     height: '100%',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    transition: 'background 0.2s',
+                    transition: 'background 0.2s, color 0.2s',
                     outline: 'none'
                 }}
             >
-                <Minus size={14} />
+                <Minus size={10} strokeWidth={1} />
             </button>
             <button
                 onClick={handleMaximize}
@@ -121,18 +121,18 @@ export const WindowControls = () => {
                 style={{
                     border: 'none',
                     background: 'transparent',
-                    color: 'var(--text-secondary)',
+                    color: '#6b7280',
                     width: '46px',
                     height: '100%',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    transition: 'background 0.2s',
+                    transition: 'background 0.2s, color 0.2s',
                     outline: 'none'
                 }}
             >
-                <Square size={11} />
+                <Square size={10} strokeWidth={1} />
             </button>
             <button
                 onClick={handleClose}
@@ -140,21 +140,21 @@ export const WindowControls = () => {
                 style={{
                     border: 'none',
                     background: 'transparent',
-                    color: 'var(--text-secondary)',
+                    color: '#6b7280',
                     width: '46px',
                     height: '100%',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    transition: 'background 0.2s',
+                    transition: 'background 0.2s, color 0.2s',
                     outline: 'none'
                 }}
             >
-                <X size={14} />
+                <X size={10} strokeWidth={1.5} />
             </button>
             <style>{`
-                .hover-bg:hover { background: rgba(255, 255, 255, 0.05) !important; color: var(--text-primary) !important; }
+                .hover-bg:hover { background: rgba(0, 0, 0, 0.05) !important; color: #1a1c23 !important; }
                 .window-control-close:hover { background: #e81123 !important; color: white !important; }
             `}</style>
         </div>

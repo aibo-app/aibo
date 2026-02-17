@@ -22,5 +22,12 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     minimize: () => electron_1.ipcRenderer.send('window-minimize'),
     maximize: () => electron_1.ipcRenderer.send('window-maximize'),
     close: () => electron_1.ipcRenderer.send('window-close'),
+    startDrag: (mouseX, mouseY) => electron_1.ipcRenderer.send('assistant-drag-start', mouseX, mouseY),
+    dragMove: (mouseX, mouseY) => electron_1.ipcRenderer.send('assistant-drag-move', mouseX, mouseY),
+    showNotification: (title, body) => electron_1.ipcRenderer.send('show-notification', title, body),
+    onGlobalPushToTalk: (callback) => {
+        electron_1.ipcRenderer.on('global-push-to-talk', (_event, action) => callback(action));
+    },
+    globalRecordingStopped: () => electron_1.ipcRenderer.send('global-recording-stopped'),
     platform: process.platform,
 });

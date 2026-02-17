@@ -6,12 +6,17 @@ interface ElectronAPI {
   minimize: () => void;
   maximize: () => void;
   close: () => void;
-  platform: string;
+  startDrag: (mouseX: number, mouseY: number) => void;
+  dragMove: (mouseX: number, mouseY: number) => void;
+  showNotification: (title: string, body: string) => void;
+  onGlobalPushToTalk: (callback: (action: 'start' | 'stop') => void) => void;
+  globalRecordingStopped: () => void;
+  platform: 'darwin' | 'win32' | 'linux';
 }
 
 declare global {
   interface Window {
-    electronAPI: ElectronAPI;
+    electronAPI?: ElectronAPI;
   }
 }
 

@@ -1,5 +1,15 @@
 import { createContext, useContext } from 'react';
-import type { PortfolioData, Transaction, GlobalStats, MarketTrend, TopMover, Wallet } from '../types';
+import type { PortfolioData, Transaction, GlobalStats, MarketTrend, TopMover, Wallet, AgentAction, AlphaData } from '../types';
+
+export interface Alert {
+    id: number;
+    icon: string;
+    title: string;
+    desc: string;
+    color: string;
+    time: string;
+    isRead: boolean;
+}
 
 export interface DataContextType {
     portfolioData: PortfolioData;
@@ -8,10 +18,16 @@ export interface DataContextType {
     marketTrends: MarketTrend[];
     topMovers: TopMover[];
     wallets: Wallet[];
+    alerts: Alert[];
+    unreadAlertCount: number;
+    alphaData: AlphaData;
     openClawStatus: boolean;
-    agentAction: any | null;
+    agentAction: AgentAction | null;
     loading: boolean;
+    initialLoadComplete: boolean;
     refreshData: () => Promise<void>;
+    markAlertRead: (id: number) => Promise<void>;
+    markAllAlertsRead: () => Promise<void>;
     activePage: string;
     setActivePage: (page: string) => void;
 }

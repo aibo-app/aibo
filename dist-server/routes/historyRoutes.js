@@ -1,0 +1,28 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const PortfolioHistoryService_1 = require("../services/PortfolioHistoryService");
+const historyRoutes = async (fastify) => {
+    // Get portfolio history
+    fastify.get('/api/portfolio/history', async (request, reply) => {
+        const { hours = '24' } = request.query;
+        const parsedHours = parseInt(hours) || 24;
+        const history = await PortfolioHistoryService_1.PortfolioHistoryService.getHistory(parsedHours);
+        return { history };
+    });
+    // Get asset-specific history
+    fastify.get('/api/portfolio/asset/:symbol/history', async (request, reply) => {
+        const { symbol } = request.params;
+        if (!symbol || typeof symbol !== 'string')
+            return reply.code(400).send({ error: 'Invalid symbol' });
+        const { hours = '24' } = request.query;
+        const parsedHours = parseInt(hours) || 24;
+        const history = await PortfolioHistoryService_1.PortfolioHistoryService.getAssetHistory(symbol.toUpperCase(), parsedHours);
+        return { symbol, history };
+    });
+    // Manually trigger snapshot (for testing)
+    fastify.post('/api/portfolio/snapshot', async (request, reply) => {
+        await PortfolioHistoryService_1.PortfolioHistoryService.takeSnapshot();
+        return { success: true, message: 'Snapshot created' };
+    });
+};
+exports.default = historyRoutes;

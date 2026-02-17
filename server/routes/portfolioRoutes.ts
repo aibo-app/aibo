@@ -55,17 +55,34 @@ export default async function portfolioRoutes(fastify: FastifyInstance) {
      * GET /api/transactions
      * Returns recent transactions for all tracked wallets
      */
+    // Transaction cache — 15s TTL, avoids hammering backend-team on every poll
+    let txCache: { data: any; time: number } | null = null;
     fastify.get('/api/transactions', async () => {
+        if (txCache && Date.now() - txCache.time < 15_000) return txCache.data;
         const userWallets = await db.select().from(wallets);
-        return await PortfolioService.getRecentTransactions(userWallets);
+        const txs = await PortfolioService.getRecentTransactions(userWallets);
+        // Strip rawData from response — frontend doesn't need it, saves ~90% bandwidth
+        const slim = txs.map(({ rawData, ...rest }: any) => rest);
+        txCache = { data: slim, time: Date.now() };
+        return slim;
     });
 
+    // Global stats cache — 60s TTL (data changes slowly)
+    let globalCache: { data: any; time: number } | null = null;
     fastify.get('/api/global', async () => {
-        return PortfolioService.getGlobalStats();
+        if (globalCache && Date.now() - globalCache.time < 60_000) return globalCache.data;
+        const data = await PortfolioService.getGlobalStats();
+        globalCache = { data, time: Date.now() };
+        return data;
     });
 
+    // Market trends cache — 30s TTL
+    let trendsCache: { data: any; time: number } | null = null;
     fastify.get('/api/market/trends', async () => {
-        return PortfolioService.getTopMarkets();
+        if (trendsCache && Date.now() - trendsCache.time < 30_000) return trendsCache.data;
+        const data = await PortfolioService.getTopMarkets();
+        trendsCache = { data, time: Date.now() };
+        return data;
     });
 
     fastify.get('/api/market/movers', async () => {

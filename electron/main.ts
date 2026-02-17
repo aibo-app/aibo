@@ -1,8 +1,17 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, session, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, session, Notification, globalShortcut, dialog, type MenuItemConstructorOptions } from 'electron';
 app.setName('Aibō');
 import path from 'path';
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
+
+// Auto-updater (production only — checks GitHub Releases)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let autoUpdater: any = null;
+try {
+  if (app.isPackaged) {
+    autoUpdater = require('electron-updater').autoUpdater;
+  }
+} catch { /* dev mode — electron-updater not bundled */ }
 
 // import { getVoiceService } from './services/VoiceService'; // REMOVED
 
@@ -11,6 +20,7 @@ let mainWindow: BrowserWindow | null = null;
 let assistantWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let serverProcess: ChildProcess | null = null;
+let isQuitting = false;
 
 const isDev = process.env.NODE_ENV === 'development';
 const PRELOAD_PATH = path.join(__dirname, 'preload.js');
@@ -31,8 +41,13 @@ if (!gotTheLock) {
     }
   });
 
-  // Disable hardware acceleration to prevent crashes with transparent windows
-  app.disableHardwareAcceleration();
+  // Performance: Chromium flags (must be set before app ready)
+  app.commandLine.appendSwitch('disable-extensions');
+  app.commandLine.appendSwitch('disable-default-apps');
+  app.commandLine.appendSwitch('disable-logging');
+  app.commandLine.appendSwitch('log-level', '3');
+  app.commandLine.appendSwitch('disable-gpu-vsync'); // Faster rendering
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion'); // Faster window show
 }
 
 /**
@@ -42,28 +57,58 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    show: false,
+    show: false, // Wait for ready-to-show to prevent blank window
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: -100, y: -100 }, // Hide native controls (we will use custom CSS ones)
-    // titleBarOverlay: false, // We use custom WindowControls in React
+    backgroundColor: '#F5F1E8', // Beige background matches app theme - prevents white flash
     webPreferences: {
       preload: PRELOAD_PATH,
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false, // Don't throttle during startup
+      spellcheck: false,
+      v8CacheOptions: 'bypassHeatCheck',
     },
     icon: path.join(__dirname, '../public/icon.png'),
   });
 
+  // Set dock icon immediately on macOS
+  if (process.platform === 'darwin') {
+    const iconPath = path.join(__dirname, '../public/icon.png');
+    app.dock.setIcon(iconPath);
+    app.dock.show();
+  }
+
+  console.log(`[Electron] Loading URL: ${INDEX_URL}`);
+  console.time('[Electron] URL load time');
   mainWindow.loadURL(INDEX_URL);
 
-  mainWindow.once('ready-to-show', () => {
-    if (process.platform === 'darwin') {
-      const iconPath = path.join(__dirname, '../public/icon.png');
-      app.dock.setIcon(iconPath);
-      app.dock.show();
-    }
+  // Show window as soon as React renders (not waiting for data)
+  let windowShown = false;
+  const showWindow = () => {
+    if (windowShown) return;
+    windowShown = true;
+    console.timeEnd('[Electron] URL load time');
+    console.timeEnd('[Electron] Total startup time');
+    console.log('[Electron] ✅ Window is now visible!');
     mainWindow?.show();
     mainWindow?.focus();
+  };
+
+  mainWindow.once('ready-to-show', showWindow);
+
+  // Force-show after 3 seconds even if page hasn't fully rendered
+  // Better to show beige background than leave user waiting
+  setTimeout(showWindow, 3000);
+
+  // macOS: Hide instead of close (keeps dock icon + server alive)
+  // Only truly close on Cmd+Q / tray Quit (isQuitting = true)
+  mainWindow.on('close', (e) => {
+    if (process.platform === 'darwin' && !isQuitting) {
+      e.preventDefault();
+      mainWindow?.hide();
+      return;
+    }
   });
 
   mainWindow.on('closed', () => {
@@ -93,28 +138,30 @@ function createAssistantWindow() {
     height: ASSISTANT_HEIGHT,
     x,
     y,
-    frame: false, // No window frame
-    transparent: true, // Glass effect
-    hasShadow: true, // NATIVE MACOS SHADOW
-    resizable: true, // USER REQUEST: Enable Resizing
-    minWidth: 300,
-    minHeight: 300,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: true,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
     alwaysOnTop: true,
-    show: isDev, // Show immediately in dev to debug
+    show: false,
     skipTaskbar: false,
     webPreferences: {
       preload: PRELOAD_PATH,
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: true,
+      spellcheck: false,
+      v8CacheOptions: 'bypassHeatCheck',
     },
+    paintWhenInitiallyHidden: false,
   });
 
   // Ensure it stays on top of EVERYTHING (including full screen apps)
   assistantWindow.setAlwaysOnTop(true, 'screen-saver');
   assistantWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-
-  // USER REQUEST: Lock Aspect Ratio for responsive resizing
-  assistantWindow.setAspectRatio(1);
 
   // Load a specific route for the assistant
   assistantWindow.loadURL(`${INDEX_URL}#/assistant`);
@@ -122,6 +169,12 @@ function createAssistantWindow() {
   assistantWindow.once('ready-to-show', () => {
     console.log('[Electron] Assistant window ready-to-show');
     assistantWindow?.show();
+    // Keep dock icon visible on macOS even when main window is hidden
+    if (process.platform === 'darwin') app.dock.show();
+  });
+
+  assistantWindow.on('closed', () => {
+    assistantWindow = null;
   });
 
   return assistantWindow;
@@ -202,8 +255,10 @@ function createMenu() {
  * Create System Tray Icon
  */
 function createTray() {
-  const iconPath = path.join(__dirname, '../public/icon.png'); // dev path
-  const icon = nativeImage.createFromPath(iconPath).resize({ width: 22, height: 22 });
+  // On macOS, use Template.png suffix for proper menu bar icon (monochrome, adapts to theme)
+  const iconPath = path.join(__dirname, '../public/tray-iconTemplate.png');
+  const icon = nativeImage.createFromPath(iconPath);
+  icon.setTemplateImage(true); // Mark as template for macOS
   tray = new Tray(icon);
 
   const contextMenu = Menu.buildFromTemplate([
@@ -225,41 +280,88 @@ function createTray() {
   tray.on('click', toggleAssistant);
 }
 
+let isCreatingAssistant = false;
+
 function toggleAssistant() {
-  if (!assistantWindow) {
-    const win = createAssistantWindow();
-    win.once('ready-to-show', () => {
-      win.show();
-      win.focus();
-    });
+  if (assistantWindow && !assistantWindow.isDestroyed()) {
+    if (assistantWindow.isVisible()) {
+      assistantWindow.hide();
+    } else {
+      assistantWindow.show();
+      assistantWindow.focus();
+      if (process.platform === 'darwin') app.dock.show();
+    }
     return;
   }
 
-  if (assistantWindow.isVisible()) {
-    assistantWindow.hide();
-  } else {
-    assistantWindow.show();
-    assistantWindow.focus();
-  }
+  // Prevent race condition from rapid double-toggle
+  if (isCreatingAssistant) return;
+  isCreatingAssistant = true;
+
+  const win = createAssistantWindow();
+  win.once('ready-to-show', () => {
+    isCreatingAssistant = false;
+    win.show();
+    win.focus();
+  });
+  // Safety fallback in case ready-to-show never fires
+  setTimeout(() => { isCreatingAssistant = false; }, 5000);
 }
 
 function startBackend() {
-  if (isDev) return; // In dev, we use concurrently in package.json
+  if (isDev) {
+    console.log('[Electron] ⚡ Dev mode - backend runs via npm concurrently');
+    return; // In dev, we use concurrently in package.json
+  }
+  if (serverProcess) {
+    console.log('[Electron] ⚠️ Backend already running');
+    return; // Already running
+  }
 
-  const serverPath = path.join(__dirname, '../server/index.js');
-  serverProcess = spawn('node', [serverPath], {
-    stdio: 'inherit',
-    env: { ...process.env, PORT: '3001' }
+  console.log('[Electron] 🚀 Starting production backend...');
+  const serverPath = path.join(__dirname, '../dist-server/index.js');
+  const userDataDir = app.getPath('userData');
+  const dataDir = path.join(userDataDir, 'data');
+
+  // Resolve openclaw-core: check extraResources first, then relative path
+  let openclawCorePath = path.join(process.resourcesPath, 'openclaw-core');
+  if (!require('fs').existsSync(openclawCorePath)) {
+    openclawCorePath = path.join(__dirname, '..', 'server', 'openclaw-core');
+  }
+
+  serverProcess = spawn(process.execPath, [serverPath], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      PORT: '3001',
+      NODE_ENV: 'production',
+      AIBO_DATA_DIR: dataDir,
+      OPENCLAW_CORE_PATH: openclawCorePath,
+    }
+  });
+
+  serverProcess.stdout?.on('data', (data: Buffer) => {
+    console.log(`[Server] ${data.toString().trim()}`);
+  });
+
+  serverProcess.stderr?.on('data', (data: Buffer) => {
+    console.error(`[Server] ${data.toString().trim()}`);
   });
 
   serverProcess.on('error', (err) => {
-    console.error('Failed to start backend server:', err);
+    console.error('[Electron] Failed to start backend server:', err);
+  });
+
+  serverProcess.on('exit', (code) => {
+    console.log(`[Electron] Backend exited with code ${code}`);
+    serverProcess = null;
   });
 }
 
 function stopBackend() {
   if (serverProcess) {
-    serverProcess.kill();
+    serverProcess.kill('SIGTERM');
     serverProcess = null;
   }
 }
@@ -267,24 +369,109 @@ function stopBackend() {
 // --- App Lifecycle ---
 
 app.whenReady().then(() => {
-  console.log('[Electron] App is ready');
+  console.log('[Electron] ✅ App is ready');
+  console.time('[Electron] Total startup time');
 
-  // Ensure dock is visible on Mac during development
+  // Ensure dock is visible on Mac
   if (process.platform === 'darwin') {
-    if (isDev) {
-      app.dock.show();
-    } else {
-      app.dock.hide();
-    }
+    app.dock.show();
   }
 
+  console.log('[Electron] Starting backend...');
+  console.time('[Electron] Backend startup');
   startBackend();
+  console.timeEnd('[Electron] Backend startup');
+
+  console.log('[Electron] Creating main window...');
+  console.time('[Electron] Window creation');
   createMainWindow();
-  createAssistantWindow(); // Created but hidden
+  console.timeEnd('[Electron] Window creation');
+
+  console.log('[Electron] Creating tray and menu...');
   createTray();
   createMenu();
 
-  // IPC handlers
+  // Global push-to-talk: Cmd+Shift+Space (Mac) / Ctrl+Shift+Space (Win/Linux)
+  // Toggle mode: press once to show popup + start recording, press again to stop.
+  // (globalShortcut only fires on keydown — no keyup detection, so toggle is the way)
+  let isGlobalRecording = false;
+  globalShortcut.register('CommandOrControl+Shift+Space', () => {
+    // Keep dock icon visible on macOS whenever assistant is activated
+    if (process.platform === 'darwin') app.dock.show();
+
+    const sendCommand = (action: 'start' | 'stop') => {
+      if (assistantWindow && !assistantWindow.isDestroyed()) {
+        assistantWindow.webContents.send('global-push-to-talk', action);
+      }
+    };
+
+    if (!assistantWindow || assistantWindow.isDestroyed()) {
+      // Create popup + start recording once ready
+      isGlobalRecording = true;
+      const win = createAssistantWindow();
+      win.once('ready-to-show', () => {
+        win.show();
+        win.focus();
+        sendCommand('start');
+      });
+    } else {
+      if (!assistantWindow.isVisible()) {
+        assistantWindow.show();
+      }
+      assistantWindow.focus();
+
+      if (isGlobalRecording) {
+        isGlobalRecording = false;
+        sendCommand('stop');
+      } else {
+        isGlobalRecording = true;
+        sendCommand('start');
+      }
+    }
+  });
+
+  // Reset toggle state when recording finishes (popup tells us via IPC)
+  ipcMain.on('global-recording-stopped', () => {
+    isGlobalRecording = false;
+  });
+
+  // ── Auto-updater (checks GitHub Releases) ──
+  if (autoUpdater) {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on('update-available', (info: any) => {
+      console.log(`[Updater] Update available: v${info.version}`);
+      if (mainWindow) {
+        mainWindow.webContents.send('update-available', info.version);
+      }
+    });
+
+    autoUpdater.on('update-downloaded', (info: any) => {
+      console.log(`[Updater] Update downloaded: v${info.version}`);
+      const response = dialog.showMessageBoxSync(mainWindow!, {
+        type: 'info',
+        title: 'Update Ready',
+        message: `Aibō v${info.version} is ready to install.`,
+        detail: 'The update will be applied when you restart.',
+        buttons: ['Restart Now', 'Later'],
+        defaultId: 0,
+      });
+      if (response === 0) {
+        isQuitting = true;
+        autoUpdater!.quitAndInstall();
+      }
+    });
+
+    autoUpdater.on('error', (err: any) => {
+      console.warn('[Updater] Auto-update error:', err.message);
+    });
+
+    // Check for updates 10s after launch (non-blocking)
+    setTimeout(() => autoUpdater!.checkForUpdates().catch(() => {}), 10_000);
+  }
+
+  console.log('[Electron] ✅ Initialization complete, waiting for window to show...');
 
   // IPC handlers
   // Allow media permissions (Microphone for Aibo)
@@ -316,18 +503,67 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on('window-close', () => {
-    mainWindow?.close();
+    if (process.platform === 'darwin') {
+      mainWindow?.hide();
+    } else {
+      mainWindow?.close();
+    }
   });
 
-  // Voice Service Integration -- REMOVED PYTHON BRIDGE
-  // Transcription is now handled via the Backend API directly from the Frontend.
+  // Assistant window drag — manual implementation for transparent macOS windows
+  let dragOffset = { x: 0, y: 0 };
+
+  ipcMain.on('assistant-drag-start', (_e, mouseX: number, mouseY: number) => {
+    if (!assistantWindow) return;
+    const [winX, winY] = assistantWindow.getPosition();
+    dragOffset = { x: mouseX - winX, y: mouseY - winY };
+  });
+
+  ipcMain.on('assistant-drag-move', (_e, mouseX: number, mouseY: number) => {
+    if (!assistantWindow) return;
+    assistantWindow.setPosition(
+      Math.round(mouseX - dragOffset.x),
+      Math.round(mouseY - dragOffset.y)
+    );
+  });
+
+  // Desktop Notifications
+  ipcMain.on('show-notification', (_e, title: string, body: string) => {
+    const notification = new Notification({
+      title,
+      body,
+      icon: path.join(__dirname, '../public/icon.png'),
+    });
+    notification.on('click', () => {
+      mainWindow?.show();
+      mainWindow?.focus();
+    });
+    notification.show();
+  });
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+    // macOS: Re-create window when dock icon is clicked and no windows exist
+    if (BrowserWindow.getAllWindows().length === 0) {
+      startBackend(); // Restart server if it was stopped
+      createMainWindow();
+    }
   });
 });
 
-app.on('window-all-closed', () => {
+// before-quit fires on Cmd+Q, tray Quit, or app.quit() — clean up server
+app.on('before-quit', () => {
+  isQuitting = true;
+  globalShortcut.unregisterAll();
   stopBackend();
-  if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform === 'darwin') {
+    // macOS: Keep app + server alive (standard macOS behavior)
+    // Server continues running so dock-click reopen is instant
+    return;
+  }
+  // Windows/Linux: Quit fully
+  stopBackend();
+  app.quit();
 });

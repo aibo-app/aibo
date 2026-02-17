@@ -1,17 +1,42 @@
+# Logs
 logs
 *.log
-.env
-.DS_Store
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Dependencies
 node_modules
 dist
 dist-ssr
+dist-electron
 *.local
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+data/
+backend-team/
+landing-page/
+release/
+references/
+
+# Build artifacts
+build/
+.turbo/
+
+# Testing
+coverage/
+test_output*.json
+*.test.db
 
 # Editor directories and files
 .vscode/*
@@ -23,3 +48,27 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.tmp
+
+# Demo/temp files
+demo-*.sh
+demo-*.js
+run-demo.sh
+temp-ui/
+
+# OpenClaw state
+server/openclaw-core/data/
+.openclaw/
+
+# Claude Code
+.claude/
+
+# Generated OpenClaw Artifacts
+SOUL.md
+openclaw.json
+cron-store.json
