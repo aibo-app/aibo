@@ -213,7 +213,7 @@ find "$PNPM"/@matrix-org+matrix-sdk-crypto-nodejs@* -name "*.node" -not -name "*
 OPENAI_VERSIONS=$(ls -d "$PNPM"/openai@* 2>/dev/null | sort -V)
 OPENAI_COUNT=$(echo "$OPENAI_VERSIONS" | wc -l | tr -d ' ')
 if [ "$OPENAI_COUNT" -gt 1 ]; then
-    echo "$OPENAI_VERSIONS" | head -n -1 | while read old; do
+    echo "$OPENAI_VERSIONS" | sed '$d' | while read old; do
         rm -rf "$old" 2>/dev/null
     done
 fi
@@ -239,7 +239,7 @@ CANVAS_VERSIONS=$(ls -d "$PNPM"/@napi-rs+canvas-*@* 2>/dev/null | sort -V)
 CANVAS_COUNT=$(echo "$CANVAS_VERSIONS" | wc -l | tr -d ' ')
 if [ "$CANVAS_COUNT" -gt 1 ]; then
     echo "[stage-openclaw] Deduplicating @napi-rs/canvas ($CANVAS_COUNT versions -> 1)..."
-    echo "$CANVAS_VERSIONS" | head -n -1 | while read old; do
+    echo "$CANVAS_VERSIONS" | sed '$d' | while read old; do
         rm -rf "$old" 2>/dev/null
     done
 fi
@@ -249,7 +249,7 @@ ZOD_VERSIONS=$(ls -d "$PNPM"/zod@* 2>/dev/null | sort -V)
 ZOD_COUNT=$(echo "$ZOD_VERSIONS" | wc -l | tr -d ' ')
 if [ "$ZOD_COUNT" -gt 1 ]; then
     echo "[stage-openclaw] Deduplicating zod ($ZOD_COUNT versions -> 1)..."
-    echo "$ZOD_VERSIONS" | head -n -1 | while read old; do
+    echo "$ZOD_VERSIONS" | sed '$d' | while read old; do
         rm -rf "$old" 2>/dev/null
     done
 fi
