@@ -27,7 +27,7 @@ Aibō follows a **Brain-Body** orchestration pattern:
 
 *   **Frontend**: React, TypeScript, Vite, Vanilla CSS (The Smooth UI).
 *   **Backend**: Fastify, Drizzle ORM, Better-SQLite3.
-*   **Agent Framework**: [OpenClaw Core](https://github.com/openclaw/openclaw-core-proto).
+*   **Agent Framework**: [OpenClaw Core](https://github.com/Start-Impulse/openclaw-core).
 *   **Blockchain**: Viem (EVM), @solana/web3.js (Solana).
 
 ## 🚀 Getting Started

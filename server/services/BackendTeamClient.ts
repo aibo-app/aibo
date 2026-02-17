@@ -24,7 +24,9 @@ export class BackendTeamClient {
     }
 
     private constructor() {
-        this.baseURL = process.env.BACKEND_TEAM_URL || process.env.TEAM_BACKEND_URL || 'http://localhost:4000';
+        const isProd = process.env.NODE_ENV === 'production';
+        const defaultUrl = isProd ? 'https://aibo-private.onrender.com' : 'http://localhost:4000';
+        this.baseURL = process.env.BACKEND_TEAM_URL || process.env.TEAM_BACKEND_URL || defaultUrl;
         this.teamToken = process.env.BACKEND_TEAM_TOKEN || process.env.TEAM_TOKEN || '';
         if (!this.teamToken) {
             console.warn('[BackendTeam] WARNING: BACKEND_TEAM_TOKEN not set. Set it in .env for secure communication.');
