@@ -53,6 +53,8 @@
       "!node_modules/@babel/**",
       "!node_modules/lodash/**",
       "!node_modules/caniuse-lite/**",
+      "!node_modules/js-tiktoken/**",
+      "!node_modules/zod/**",
       "package.json"
     ],
     "asarUnpack": [
@@ -128,8 +130,8 @@
     "better-sqlite3": "^12.6.2",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.1",
+    "electron-updater": "^6.3.9",
     "fastify": "^5.7.4",
-    "js-tiktoken": "^1.0.21",
     "lucide-react": "^0.563.0",
     "node-edge-tts": "^1.2.10",
     "react": "^19.2.0",
@@ -139,8 +141,7 @@
     "recharts": "^3.7.0",
     "remark-gfm": "^4.0.1",
     "ws": "^8.19.0",
-    "yaml": "^2.8.2",
-    "electron-updater": "^6.3.9"
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

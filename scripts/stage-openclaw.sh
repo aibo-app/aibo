@@ -227,6 +227,33 @@ find "$DEST/node_modules" -maxdepth 5 -name "LICENSE*" -type f -delete 2>/dev/nu
 # Strip remaining .ts source files from packages (compiled JS is used)
 find "$DEST/node_modules/.pnpm" -maxdepth 7 -name "*.ts" -not -name "*.d.ts" -not -path "*/dist/*" -type f -delete 2>/dev/null || true
 
+# Strip macOS DMG installer backgrounds (not needed at runtime)
+rm -f "$DEST/assets/dmg-background.png" 2>/dev/null
+rm -f "$DEST/assets/dmg-background-small.png" 2>/dev/null
+
+# Strip Chrome extension assets (not used in Electron context)
+rm -rf "$DEST/assets/chrome-extension" 2>/dev/null
+
+# Deduplicate @napi-rs/canvas binaries — keep only the latest version
+CANVAS_VERSIONS=$(ls -d "$PNPM"/@napi-rs+canvas-*@* 2>/dev/null | sort -V)
+CANVAS_COUNT=$(echo "$CANVAS_VERSIONS" | wc -l | tr -d ' ')
+if [ "$CANVAS_COUNT" -gt 1 ]; then
+    echo "[stage-openclaw] Deduplicating @napi-rs/canvas ($CANVAS_COUNT versions -> 1)..."
+    echo "$CANVAS_VERSIONS" | head -n -1 | while read old; do
+        rm -rf "$old" 2>/dev/null
+    done
+fi
+
+# Deduplicate zod versions — keep only the latest
+ZOD_VERSIONS=$(ls -d "$PNPM"/zod@* 2>/dev/null | sort -V)
+ZOD_COUNT=$(echo "$ZOD_VERSIONS" | wc -l | tr -d ' ')
+if [ "$ZOD_COUNT" -gt 1 ]; then
+    echo "[stage-openclaw] Deduplicating zod ($ZOD_COUNT versions -> 1)..."
+    echo "$ZOD_VERSIONS" | head -n -1 | while read old; do
+        rm -rf "$old" 2>/dev/null
+    done
+fi
+
 # ── 8. Report final size ────────────────────────────────────────────────────
 TOTAL=$(du -sm "$DEST" | cut -f1)
 NM=$(du -sm "$DEST/node_modules" 2>/dev/null | cut -f1)
